@@ -9,11 +9,12 @@ class Obstacle(object):
         self.y1 = y1
         self.x2 = x2
         self.y2 = y2
+        # add self.grid = row, col
 class Char(object):
     def __init__(self, cx, cy):
         self.cx = cx
         self.cy = cy
-        self.speed = 15
+        self.speed = 12.5
         self.t0 = 0
         self.isMoving = False
         self.isAttacking = False # stay here cuz draw fcn loop thru char
@@ -64,11 +65,11 @@ def appStarted(app):
     app.margin = 20
     # create characters with init position
     app.charList = []
-    app.killer = Killer(app.width//2, app.height*(5/6))
+    app.killer = Killer(app.margin+(23*25-12.5), app.topMargin+(17*25-12.5))
     app.charList.append(app.killer)
-    app.survA = Survivor(app.width//4, app.height*(2/3))
+    app.survA = Survivor(app.margin+(12*25-12.5), app.topMargin+(10*25-12.5))
     app.charList.append(app.survA)
-    app.survB = Survivor(app.width//5, app.height*(2/3))
+    app.survB = Survivor(app.margin+(13*25-12.5), app.topMargin+(16*25-12.5))
     app.charList.append(app.survB)
     # create walking animation sprite
     # parameters: x1, y1, x2, y2, frame, upDown, isKiller
@@ -100,8 +101,8 @@ def appStarted(app):
     app.wallB2 = Obstacle(app.margin + 100, app.topMargin + 100,
         app.margin+350, app.topMargin + 150)
     app.obsList.append(app.wallB2)
-    app.wallB3 = Obstacle(app.margin+475, app.topMargin+50,
-        app.margin+525, app.topMargin+200)
+    app.wallB3 = Obstacle(app.margin+500, app.topMargin+50,
+        app.margin+550, app.topMargin+200)
     app.obsList.append(app.wallB3)
     # walls in area C
     app.wallC1 = Obstacle(app.margin+100, app.height-app.margin-125,
@@ -139,12 +140,13 @@ def appStarted(app):
     app.jail = Obstacle(app.width-app.margin-100, app.topMargin,
         app.width-app.margin, app.topMargin+100)
     app.obsList.append(app.jail)
-    app.center = Obstacle(app.width//2-50,
-        app.height//2+(app.topMargin-app.margin)-50,
-        app.width//2 + 50, app.height//2+(app.topMargin-app.margin)+50)
+    app.center = Obstacle(app.margin + (23*25),
+        app.topMargin + (11*25), app.margin + (27*25), app.topMargin + (15*25))
     app.obsList.append(app.center)
-    app.gate = Obstacle(app.width//2 - 150, app.height-app.margin-20,
-        app.width//2 + 150, app.height-app.margin)
+    # app.gate = Obstacle(app.width//2 - 150, app.height-app.margin-20,
+    #     app.width//2 + 150, app.height-app.margin)
+    app.gate = Obstacle(app.margin+(19*25), app.height-app.margin-25,
+        app.margin+(30*25), app.height-app.margin)
     app.obsList.append(app.gate)
 
 def inObstacle(app, obs, x, y, char): # used in move fcn
@@ -223,8 +225,8 @@ def timerFired(app):
     for char in app.charList:
         for obs in app.obsList: # if in obstacle then pop out of jail
             if inObstacle(app, obs, char.cx, char.cy, char):
-                char.cx = app.width - app.margin - 200
-                char.cy = app.topMargin + 100
+                char.cx = app.width - app.margin - 50
+                char.cy = app.topMargin + 150
         if char.isMoving: # no input for a while --> status = not moving
             char.spriteCounter = (1 + char.spriteCounter) % len(char.sprites)
             if time.time() - char.t0 >= 0.1:
@@ -271,16 +273,25 @@ def drawBasicScreen(app, canvas):
     canvas.create_rectangle(app.margin, app.topMargin,
         app.width - app.margin, app.height - app.margin, outline = 'black')
 
+def draw25Grids(app, canvas):
+    for row in range(23):
+        for col in range(49):
+            canvas.create_rectangle(app.margin+col*25,
+                app.topMargin+row*25, app.margin+(col+1)*25,
+                app.topMargin+(row+1)*25)
+
 def redrawAll(app, canvas):
     drawBasicScreen(app, canvas)
     for char in app.charList:
         drawChar(app, canvas, char)
     drawWalls(app, canvas)
+    # draw25Grids(app, canvas)
+    # draw50Grids(app, canvas)
 
 #################################################
 # main
 #################################################
-runApp(width=1280, height=680)
+runApp(width=1265, height=675)
 '''
 Works Cites:
 https://penusbmic.itch.io/sci-fi-character-pack-12
