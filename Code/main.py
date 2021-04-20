@@ -4,7 +4,7 @@ import tkinter as tk
 import string, random, time
 
 def appStarted(app):
-    # display
+    # basic display
     app.topMargin = 80
     app.margin = 20
 
@@ -14,8 +14,7 @@ def appStarted(app):
 
 def drawBasicScreen(app, canvas):
     canvas.create_rectangle(app.margin, app.topMargin,
-        app.width - app.margin, app.height - app.margin,
-        fill = 'white', outline = 'black')
+        app.width - app.margin, app.height - app.margin, outline = 'black')
 
 def redrawAll(app, canvas):
     drawBasicScreen(app, canvas)
