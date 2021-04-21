@@ -267,7 +267,7 @@ def drawChar(app, canvas, char):
 def drawWalls(app, canvas):
     for obs in app.obsList:
         canvas.create_rectangle(obs.x1, obs.y1,
-            obs.x2, obs.y2,)
+            obs.x2, obs.y2, fill='grey')
 
 def drawBasicScreen(app, canvas):
     canvas.create_rectangle(app.margin, app.topMargin,
@@ -286,14 +286,15 @@ def redrawAll(app, canvas):
         drawChar(app, canvas, char)
     drawWalls(app, canvas)
     # draw25Grids(app, canvas)
-    # draw50Grids(app, canvas)
+    # draw50Grids(app, canvas)??
 
 #################################################
 # main
 #################################################
 runApp(width=1265, height=675)
+# 575*1225 ==GRIDS==> 23*47 (row, col)
 '''
-Works Cites:
+Works Cited:
 https://penusbmic.itch.io/sci-fi-character-pack-12
 https://maytch.itch.io/free-32x64-kanako-platformer-character-sprite-set
 '''
