@@ -5,19 +5,43 @@ import time
 #################################################
 # from: https://www.cs.cmu.edu/~112/notes/notes-graphics.html
 def rgbString(r, g, b): return f'#{r:02x}{g:02x}{b:02x}'
+def getCellBounds(margin, topMargin, row, col):
+    x1 = margin + col*50
+    x2 = margin + (col+1)*50
+    y1 = topMargin + row*50
+    y2 = topMargin + (row+1)*50
+    return x1, y1, x2, y2
+def getRowCol(margin, topMargin, x, y): # check boundary? nah
+    col = (x - margin)//50
+    row = (y - topMargin)//50
+    return row, col
 #################################################
 # create classes
 #################################################
 class Obstacle(object):
-    def __init__(self, x1, y1, x2, y2):
+    def __init__(self, row, col):
+        self.row = row
+        self.col = col
+        x1, y1, x2, y2 = getCellBounds(20, 80, row, col)
         self.x1 = x1
         self.y1 = y1
         self.x2 = x2
         self.y2 = y2
-        # add self.grid = row, col
+class Chest(Obstacle):
+    def __init__(self, row, col):
+        super().__init__(row, col)
+        closedImage = Image.open('closedChest.png')
+        self.closedImage = closedImage.resize((50, 50))
+        openedImage = Image.open('openedChest.png')
+        self.openedImage = openedImage.resize((50, 50))
+        self.cx = (self.x1+self.x2)/2
+        self.cy = (self.y1+self.x2)/2
+        self.percentage = 0
+    def getMessage(self):
+        return f'Opening Process  {self.percentage}/100%'
 class PassableObs(Obstacle):
-    def __init__(self, x1, y1, x2, y2, r, g, b):
-        super().__init__(x1, y1, x2, y2)
+    def __init__(self, row, col, r, g, b):
+        super().__init__(row, col)
         self.color = rgbString(r, g, b)
         self.passable = False
 class Char(object):
@@ -81,9 +105,6 @@ def appStarted(app):
     app.topMargin = 80
     app.margin = 20
     app.mainMessage = 'Press Arrow Keys To Move'
-    # chest
-    app.chestPercentage = 0
-    app.chestMessage = f'Chest Opening Process  {app.chestPercentage}/100%'
     # create characters with init position
     app.charList = []
     app.killer = Killer(app.margin+(23*25-12.5), app.topMargin+(17*25-12.5))
@@ -106,70 +127,66 @@ def appStarted(app):
     # create obstacles, parameters: x1, y1, x2, y2
     app.obsList = []
     app.passableObs = []
-    # wall at center
-    app.center = Obstacle(app.margin + (22*25),
-        app.topMargin + (12*25), app.margin + (26*25), app.topMargin + (14*25))
-    app.obsList.append(app.center)
+    # wall at center {row:(6) col: (11,12)}
+    app.obsList += [Obstacle(6,11), Obstacle(6,12)]
     # walls in area A (name has same order as quadrants)
-    app.wallA1 = Obstacle(app.width-app.margin-450, app.height-app.margin-400,
-        app.width-app.margin-400, app.height-app.margin-200)
-    app.obsList.append(app.wallA1)
-    app.wallA2 = Obstacle(app.width-app.margin-600, app.topMargin + 50,
-        app.width-app.margin-300, app.topMargin+100)
-    app.obsList.append(app.wallA2)
-    app.wallA3 = Obstacle(app.width-app.margin-200, app.topMargin + 50,
-        app.width-app.margin-150, app.topMargin+200)
-    app.obsList.append(app.wallA3)
+    #   A1 {row:(3,4,5,6) col: (15)}
+    #   A2 {row:(1) col: (12,13,14,15,16,17)}
+    #   A3 {row:(1,2,3) col:(20)} 
+    app.obsList += [Obstacle(3,15),Obstacle(4,15),Obstacle(5,15),Obstacle(6,15)]
+    app.obsList += [Obstacle(1,12),Obstacle(1,13),Obstacle(1,14),Obstacle(1,15),
+        Obstacle(1,16),Obstacle(1,17)]
+    app.obsList += [Obstacle(1,20),Obstacle(2,20),Obstacle(3,20)]
     # walls in area B
-    app.wallB1 = Obstacle(app.margin+300, app.topMargin,
-        app.margin+350, app.topMargin+50)
-    app.obsList.append(app.wallB1)
-    app.wallB2 = Obstacle(app.margin + 100, app.topMargin + 100,
-        app.margin+350, app.topMargin + 150)
-    app.obsList.append(app.wallB2)
-    app.wallB3 = Obstacle(app.margin+500, app.topMargin+50,
-        app.margin+550, app.topMargin+200)
-    app.obsList.append(app.wallB3)
+    #   B1 {row:(0) col:(6)} 
+    #   B2 {row:(2) col:(2,3,4,5,6)}
+    #   B3 {row:(1,2,3) col:(10)}
+    app.obsList += [Obstacle(0,6)]
+    app.obsList += [Obstacle(2,2),Obstacle(2,3),Obstacle(2,4),Obstacle(2,5),
+        Obstacle(2,6)]
+    app.obsList += [Obstacle(1,10),Obstacle(2,10),Obstacle(3,10)]
     # walls in area C
-    app.wallC1 = Obstacle(app.margin+100, app.height-app.margin-150,
-        app.margin+300, app.height-app.margin-100)
-    app.obsList.append(app.wallC1)
-    app.wallC2 = Obstacle(app.margin+350, app.height-app.margin-150,
-        app.margin+450, app.height-app.margin-100)
-    app.obsList.append(app.wallC2)
-    app.wallC3 = Obstacle(app.margin+400, app.height-app.margin-350,
-        app.margin+450, app.height-app.margin-150)
-    app.obsList.append(app.wallC3)
-    app.wallC4 = Obstacle(app.margin+150, app.height-app.margin-250,
-        app.margin+200, app.height-app.margin-150)
-    app.obsList.append(app.wallC4)
-    app.wallC5 = Obstacle(app.margin, app.height-app.margin-350,
-        app.margin+250, app.height-app.margin-300)
-    app.obsList.append(app.wallC5)
+    #   C1 {row:(8) col:(2,3,4,5)} 
+    #   C2 {row:(8) col:(7,8)} 
+    #   C3 {row:(4,5,6,7) col:(8)} 
+    #   C4 {row:(6,7,8) col:(3)} 
+    #   C5 {row:(4) col:(0,1,2,3,4)} 
+    app.obsList += [Obstacle(8,2),Obstacle(8,3),Obstacle(8,4),Obstacle(8,5)]
+    app.obsList += [Obstacle(8,7),Obstacle(8,8)]
+    app.obsList += [Obstacle(4,8),Obstacle(5,8),Obstacle(6,8),Obstacle(7,8)]
+    app.obsList += [Obstacle(6,3),Obstacle(7,3),Obstacle(8,3)]
+    app.obsList += [Obstacle(4,0),Obstacle(4,1),Obstacle(4,2),
+        Obstacle(4,3),Obstacle(4,4)]
     # walls in area D
-    app.wallD1 = Obstacle(app.width-app.margin-300, app.height-app.margin-200,
-        app.width-app.margin-250, app.height-app.margin-100)
-    app.obsList.append(app.wallD1)
-    app.wallD2 = Obstacle(app.width-app.margin-250, app.height-app.margin-50,
-        app.width-app.margin-200, app.height-app.margin)
-    app.obsList.append(app.wallD2)
-    app.wallD3 = Obstacle(app.width-app.margin-300, app.height-app.margin-300,
-        app.width-app.margin, app.height-app.margin-250)
-    app.obsList.append(app.wallD3)
-    app.wallD4 = Obstacle(app.width-app.margin-250, app.height-app.margin-200,
-        app.width-app.margin-75, app.height-app.margin-150)
-    app.obsList.append(app.wallD4)
-    app.wallD5 = Obstacle(app.width-app.margin-400, app.height-app.margin-100,
-        app.width-app.margin-350, app.height-app.margin)
-    app.obsList.append(app.wallD5)
-    # passable obstacles: jail, gate
-    app.jail = PassableObs(app.width-app.margin-100, app.topMargin,
-        app.width-app.margin, app.topMargin+100, 161, 66, 100)
-    app.passableObs.append(app.jail)
-    app.gate = PassableObs(app.margin+(20*25), app.height-app.margin-50,
-        app.margin+(30*25), app.height-app.margin, 160, 191, 115)
-    app.passableObs.append(app.gate)
+    #   D1 {row:(8) col:(18)} 
+    #   D2 {row:(10) col:(19)} 
+    #   D3 {row:(5) col:(18,19,20,21,22,23)} 
+    #   D4 {row:(7) col:(18,19,20,21,22)} 
+    #   D5 {row:(9,10) col:(16)} 
+    app.obsList += [Obstacle(8,18)]
+    app.obsList += [Obstacle(10,19)]
+    app.obsList += [Obstacle(5,18),Obstacle(5,19),Obstacle(5,20),
+        Obstacle(5,21),Obstacle(5,22),Obstacle(5,23)]
+    app.obsList += [Obstacle(7,18),Obstacle(7,19),Obstacle(7,20),
+        Obstacle(7,21),Obstacle(7,22)]
+    app.obsList += [Obstacle(9,16),Obstacle(10,16)]
+    # passable obstacles: 2d list [[jail], [gate]]
+    app.jail = []
+    app.gate = []
+    #   jail {row:(0,1) col:(22,23) rgb:(161, 66, 100)} 
+    #   gate {row:(10) col:(10,11,12,13,14) rgb:(160, 191, 115)}
+    app.jail += [PassableObs(0,22, 161, 66, 100),
+        PassableObs(0,23, 161, 66, 100),PassableObs(1,22, 161, 66, 100),
+        PassableObs(1,23, 161, 66, 100)]
+    app.gate += [PassableObs(10,10, 160, 191, 115),
+        PassableObs(10,11, 160, 191, 115),PassableObs(10,12, 160, 191, 115),
+        PassableObs(10,13, 160, 191, 115),PassableObs(10,14, 160, 191, 115)]
+    app.passableObs += [app.jail, app.gate]
     # chest: append in obsList
+    app.chest1 = Chest(1,1)
+    app.chest2 = Chest(9,22)
+    app.chestList = [app.chest1, app.chest2]
+    app.obsList += [app.chest1, app.chest2]
 
 def inObstacle(app, obs, x, y, char): # used in move fcn
     # change to obs.x1+char.rx <= x <= obs.x2-char.rx
@@ -185,10 +202,11 @@ def move(app, char, dx, dy): # move when valid
         if inObstacle(app, obs, char.cx, char.cy, char):
             char.cx -= dx
             char.cy -= dy
-    for obs in app.passableObs: # check if char in passable obstacle
-        if inObstacle(app, obs, char.cx, char.cy, char) and (not obs.passable):
-            char.cx -= dx
-            char.cy -= dy
+    for lst in app.passableObs: # check if char in passable obstacle (2d list)
+        for obs in lst:
+            if inObstacle(app,obs,char.cx,char.cy,char) and (not obs.passable):
+                char.cx -= dx
+                char.cy -= dy
     if char.cx < char.rx + app.margin \
         or char.cx > app.width - char.rx - app.margin: # check x bounds
         char.cx -= dx
@@ -246,6 +264,10 @@ def keyPressed(app, event):
         elif event.key == 'Space':
             app.killer.isAttacking = True
             # app.killer.isMoving = False # attack animation speeds up a bit
+    # elif event.key == 'b': # debug use
+    #     app.chest1.percentage += 25
+    # elif event.key == 'n': # debug use
+    #     app.chest2.percentage += 25
 
 def timerFired(app):
     for char in app.charList:
@@ -270,6 +292,7 @@ def timerFired(app):
 # graphics
 #################################################
 def drawChar(app, canvas, char):
+    # adapted from: https://www.cs.cmu.edu/~112/notes/notes-animations-part4.html#loadImageUsingUrl
     if char.isFacingRight:
         if char.isAttacking:
             sprite = char.attackSprites[char.attackSpriteCounter]
@@ -297,17 +320,32 @@ def drawWalls(app, canvas):
             obs.x2, obs.y2, fill='grey')
 
 def drawPassableObs(app, canvas):
-    for obs in app.passableObs:
-        canvas.create_rectangle(obs.x1, obs.y1,
-            obs.x2, obs.y2, fill=obs.color)
+    for lst in app.passableObs:
+        for obs in lst:
+            canvas.create_rectangle(obs.x1, obs.y1,
+                obs.x2, obs.y2, fill=obs.color)
+
+def drawChests(app, canvas):
+    # adapted from: https://www.cs.cmu.edu/~112/notes/notes-animations-part4.html#loadImageUsingUrl
+    for chest in app.chestList:
+        if chest.percentage >= 100:
+            canvas.create_image(app.margin+25+chest.col*50,
+                app.topMargin+25+chest.row*50,
+                image=ImageTk.PhotoImage(chest.openedImage))
+        elif chest.percentage < 100:
+            canvas.create_image(app.margin+25+chest.col*50,
+                app.topMargin+25+chest.row*50,
+                image=ImageTk.PhotoImage(chest.closedImage))
 
 def drawBasicScreen(app, canvas):
     canvas.create_rectangle(app.margin, app.topMargin,
         app.width - app.margin, app.height - app.margin, outline = 'black')
     canvas.create_text(app.width//2, app.topMargin//2,
         text=app.mainMessage, font='Ariel 20') # main
-    canvas.create_text(app.margin, app.topMargin//2, anchor='w',
-        text=app.chestMessage, font='Ariel 20') # chest
+    canvas.create_text(app.margin, app.topMargin//4, anchor='w',
+        text=f'Chest 1 {app.chest1.getMessage()}', font='Ariel 20') # chest 1
+    canvas.create_text(app.margin, app.topMargin*(3/4), anchor='w',
+        text=f'Chest 2 {app.chest2.getMessage()}', font='Ariel 20') # chest 2
     # survivor A status
     canvas.create_text(app.width-13*app.margin,app.topMargin//4,
         anchor='e', text='P1', font='Ariel 15') 
@@ -343,6 +381,7 @@ def redrawAll(app, canvas):
     for char in app.charList:
         drawChar(app, canvas, char)
     drawWalls(app, canvas)
+    drawChests(app, canvas)
     # draw25Grids(app, canvas)
     draw50Grids(app, canvas)
 
@@ -350,9 +389,9 @@ def redrawAll(app, canvas):
 # main
 #################################################
 runApp(width=1240, height=650)
-# 575*1225 ==GRIDS==> 23*47 (row, col)
+# 550*1200 ==GRIDS==> 11*24 (row, col)
 '''
-Works Cited:
+Assets Cited:
 https://penusbmic.itch.io/sci-fi-character-pack-12
 https://maytch.itch.io/free-32x64-kanako-platformer-character-sprite-set
 '''
