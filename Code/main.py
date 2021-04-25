@@ -14,7 +14,13 @@ def getCellBounds(margin, topMargin, row, col):
 def getRowCol(margin, topMargin, x, y): # check boundary? nah
     col = (x - margin)//50
     row = (y - topMargin)//50
-    return row, col
+    return int(row), int(col)
+def gridDist(r1, c1, r2, c2):
+    return abs(r1-r2) + abs(c1-c2)
+def checkIfAround(r1, c1, r2, c2):
+    if gridDist(r1, c1, r2, c2) == 1: return True
+    elif abs(r1-r2) == 1 and abs(c1-c2) == 1: return True
+    return False
 #################################################
 # create classes
 #################################################
@@ -37,6 +43,10 @@ class Chest(Obstacle):
         self.cx = (self.x1+self.x2)/2
         self.cy = (self.y1+self.x2)/2
         self.percentage = 0
+        self.survAIsAround = False
+        self.survAIsOpening = False
+        self.opening = False
+        self.isOpened = False
     def getMessage(self):
         return f'Opening Process  {self.percentage}/100%'
 class PassableObs(Obstacle):
@@ -105,6 +115,12 @@ def appStarted(app):
     app.topMargin = 80
     app.margin = 20
     app.mainMessage = 'Press Arrow Keys To Move'
+    # game booleans
+    app.t0 = 0
+    app.gateOpened = False
+    app.gameOver = False
+    app.escaped = False
+    app.lost = False
     # create characters with init position
     app.charList = []
     app.killer = Killer(app.margin+(23*25-12.5), app.topMargin+(17*25-12.5))
@@ -215,6 +231,7 @@ def move(app, char, dx, dy): # move when valid
         char.cy -= dy
 
 def keyPressed(app, event):
+    if app.gameOver: return
     # move survA direction key
     if event.key == 'Left' or event.key == 'Right' or event.key == 'Up'\
         or event.key == 'Down':
@@ -264,12 +281,15 @@ def keyPressed(app, event):
         elif event.key == 'Space':
             app.killer.isAttacking = True
             # app.killer.isMoving = False # attack animation speeds up a bit
-    # elif event.key == 'b': # debug use
-    #     app.chest1.percentage += 25
-    # elif event.key == 'n': # debug use
-    #     app.chest2.percentage += 25
+    for chest in app.chestList: # doesn't distinguish
+        if chest.survAIsAround and (event.key.lower() == 'f'):
+            app.t0 = time.time()
+            chest.survAIsOpening = True
+            app.mainMessage = 'Opening...'
 
 def timerFired(app):
+    if app.gameOver: return
+    # chars sprites + check if char in obstacle
     for char in app.charList:
         for obs in app.obsList: # if accidently enter obstacle then pop out
             if inObstacle(app, obs, char.cx, char.cy, char):
@@ -285,8 +305,37 @@ def timerFired(app):
             if char.attackSpriteCounter >= len(char.attackSprites):
                 char.isAttacking = False
                 char.attackSpriteCounter = 0
-        else: # not miving --> only show first frame (idle char)
+        else: # not moving --> only show first frame (idle char)
             char.spriteCounter = 0
+    # chest
+    rA, cA = getRowCol(app.margin, app.topMargin, app.survA.cx, app.survA.cy)
+    if app.chest1.isOpened or app.chest2.isOpened: # check game win
+        app.mainMessage = 'The Gate Has Opened'
+        app.gateOpened = True
+        for gateCell in app.gate:
+            gateCell.passable = True
+            if rA == gateCell.row and cA == gateCell.col:
+                app.gameOver = True
+                app.escaped = True
+                app.mainMessage = 'You Escaped!'
+    elif not checkIfAround(rA, cA, app.chest1.row, app.chest1.col) and\
+        not checkIfAround(rA, cA, app.chest2.row, app.chest2.col): # do for either chest
+        app.chest1.survAIsAround = False
+        app.chest1.survAIsOpening = False
+        app.chest2.survAIsAround = False
+        app.chest2.survAIsOpening = False
+        app.mainMessage = 'Press Arrow Keys To Move'
+    else: # open chest
+        for chest in app.chestList: # do for evey chest
+            if checkIfAround(rA, cA, chest.row, chest.col) and\
+                not chest.survAIsOpening:
+                chest.survAIsAround = True
+                app.mainMessage = 'Press F to Open the Chest'
+            elif chest.survAIsOpening and time.time()-app.t0 >= 0.5:
+                app.t0 = time.time()
+                chest.percentage += 5
+                if chest.percentage >= 100:
+                    chest.isOpened = True
 
 #################################################
 # graphics
@@ -341,7 +390,7 @@ def drawBasicScreen(app, canvas):
     canvas.create_rectangle(app.margin, app.topMargin,
         app.width - app.margin, app.height - app.margin, outline = 'black')
     canvas.create_text(app.width//2, app.topMargin//2,
-        text=app.mainMessage, font='Ariel 20') # main
+            text=app.mainMessage, font='Ariel 20') # main
     canvas.create_text(app.margin, app.topMargin//4, anchor='w',
         text=f'Chest 1 {app.chest1.getMessage()}', font='Ariel 20') # chest 1
     canvas.create_text(app.margin, app.topMargin*(3/4), anchor='w',
