@@ -3,8 +3,7 @@ import time
 #################################################
 # helpers
 #################################################
-# from: https://www.cs.cmu.edu/~112/notes/notes-graphics.html
-def rgbString(r, g, b): return f'#{r:02x}{g:02x}{b:02x}'
+def rgbString(r, g, b): return f'#{r:02x}{g:02x}{b:02x}' # from: https://www.cs.cmu.edu/~112/notes/notes-graphics.html
 def getCellBounds(margin, topMargin, row, col):
     x1 = margin + col*50
     x2 = margin + (col+1)*50
@@ -127,7 +126,7 @@ def appStarted(app):
     app.charList.append(app.killer)
     app.survA = Survivor(app.margin+(12*25-12.5), app.topMargin+(10*25-12.5))
     app.charList.append(app.survA)
-    app.survB = Survivor(app.margin+(13*25-12.5), app.topMargin+(16*25-12.5))
+    app.survB = Survivor(app.margin+(37*25-12.5), app.topMargin+(8*25-12.5))
     app.charList.append(app.survB)
     # create walking animation sprite
     # parameters: x1, y1, x2, y2, frame, upDown, isKiller
@@ -287,9 +286,7 @@ def keyPressed(app, event):
             chest.survAIsOpening = True
             app.mainMessage = 'Opening...'
 
-def timerFired(app):
-    if app.gameOver: return
-    # chars sprites + check if char in obstacle
+def generateCharSprites(app):
     for char in app.charList:
         for obs in app.obsList: # if accidently enter obstacle then pop out
             if inObstacle(app, obs, char.cx, char.cy, char):
@@ -307,7 +304,8 @@ def timerFired(app):
                 char.attackSpriteCounter = 0
         else: # not moving --> only show first frame (idle char)
             char.spriteCounter = 0
-    # chest
+
+def chestsAndEscaping(app):
     rA, cA = getRowCol(app.margin, app.topMargin, app.survA.cx, app.survA.cy)
     if app.chest1.isOpened or app.chest2.isOpened: # check game win
         app.mainMessage = 'The Gate Has Opened'
@@ -336,6 +334,11 @@ def timerFired(app):
                 chest.percentage += 5
                 if chest.percentage >= 100:
                     chest.isOpened = True
+
+def timerFired(app):
+    if app.gameOver: return
+    generateCharSprites(app) # animation
+    chestsAndEscaping(app) # open chests and check for escape (win)
 
 #################################################
 # graphics
@@ -366,13 +369,13 @@ def drawChar(app, canvas, char):
 def drawWalls(app, canvas):
     for obs in app.obsList:
         canvas.create_rectangle(obs.x1, obs.y1,
-            obs.x2, obs.y2, fill='grey')
+            obs.x2, obs.y2, fill='grey', outline='grey')
 
 def drawPassableObs(app, canvas):
     for lst in app.passableObs:
         for obs in lst:
             canvas.create_rectangle(obs.x1, obs.y1,
-                obs.x2, obs.y2, fill=obs.color)
+                obs.x2, obs.y2, fill=obs.color, outline=obs.color)
 
 def drawChests(app, canvas):
     # adapted from: https://www.cs.cmu.edu/~112/notes/notes-animations-part4.html#loadImageUsingUrl
@@ -387,10 +390,12 @@ def drawChests(app, canvas):
                 image=ImageTk.PhotoImage(chest.closedImage))
 
 def drawBasicScreen(app, canvas):
+    # main message and screen
     canvas.create_rectangle(app.margin, app.topMargin,
         app.width - app.margin, app.height - app.margin, outline = 'black')
     canvas.create_text(app.width//2, app.topMargin//2,
-            text=app.mainMessage, font='Ariel 20') # main
+            text=app.mainMessage, font='Ariel 20')
+    # chest info
     canvas.create_text(app.margin, app.topMargin//4, anchor='w',
         text=f'Chest 1 {app.chest1.getMessage()}', font='Ariel 20') # chest 1
     canvas.create_text(app.margin, app.topMargin*(3/4), anchor='w',
@@ -432,7 +437,7 @@ def redrawAll(app, canvas):
     drawWalls(app, canvas)
     drawChests(app, canvas)
     # draw25Grids(app, canvas)
-    draw50Grids(app, canvas)
+    # draw50Grids(app, canvas)
 
 #################################################
 # main
