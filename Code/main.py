@@ -42,12 +42,14 @@ class Chest(Obstacle):
         self.cx = (self.x1+self.x2)/2
         self.cy = (self.y1+self.x2)/2
         self.percentage = 0
+        self.progPerSec = 5
         self.survAIsAround = False
         self.survAIsOpening = False
+        self.survBIsOpening = False
         self.opening = False
         self.isOpened = False
     def getMessage(self):
-        return f'Opening Process  {self.percentage}/100%'
+        return f'Opening Process  {self.percentage}%'
 class PassableObs(Obstacle):
     def __init__(self, row, col, r, g, b):
         super().__init__(row, col)
@@ -114,19 +116,23 @@ def appStarted(app):
     app.topMargin = 80
     app.margin = 20
     app.mainMessage = 'Press Arrow Keys To Move'
+    # game settings (partial)
+    app.At0 = 0
+    app.Bt0 = 0
+    app.chaseT0 = 0
+    app.killerSearchInterval = 3
     # game booleans
-    app.t0 = 0
     app.gateOpened = False
     app.gameOver = False
     app.escaped = False
     app.lost = False
     # create characters with init position
     app.charList = []
-    app.killer = Killer(app.margin+(23*25-12.5), app.topMargin+(17*25-12.5))
+    app.killer = Killer(app.margin+(23*25), app.topMargin+(17*25))
     app.charList.append(app.killer)
-    app.survA = Survivor(app.margin+(12*25-12.5), app.topMargin+(10*25-12.5))
+    app.survA = Survivor(app.margin+(11*25), app.topMargin+(9*25))
     app.charList.append(app.survA)
-    app.survB = Survivor(app.margin+(37*25-12.5), app.topMargin+(8*25-12.5))
+    app.survB = Survivor(app.margin+(37*25), app.topMargin+(7*25))
     app.charList.append(app.survB)
     # create walking animation sprite
     # parameters: x1, y1, x2, y2, frame, upDown, isKiller
@@ -229,7 +235,20 @@ def move(app, char, dx, dy): # move when valid
         or char.cy > app.height - char.ry - app.margin: # check y bounds
         char.cy -= dy
 
+def cheatKeys(app, event):
+    if event.key.lower() == 'r': # can restart and any time
+        appStarted(app)
+    if event.key == '1': # open gate by opening chest 1
+        app.chest1.percentage = 100
+    if event.key == '3': # teleport surv A to chest 1
+        app.survA.cx = app.margin + 75
+        app.survA.cy = app.topMargin + 125
+    if event.key == '4': # teleport surv A to chest 2
+        app.survA.cx = app.width - app.margin - 75 
+        app.survA.cy = app.topMargin + 425
+
 def keyPressed(app, event):
+    cheatKeys(app, event)
     if app.gameOver: return
     # move survA direction key
     if event.key == 'Left' or event.key == 'Right' or event.key == 'Up'\
@@ -282,7 +301,7 @@ def keyPressed(app, event):
             # app.killer.isMoving = False # attack animation speeds up a bit
     for chest in app.chestList: # doesn't distinguish
         if chest.survAIsAround and (event.key.lower() == 'f'):
-            app.t0 = time.time()
+            app.At0 = time.time()
             chest.survAIsOpening = True
             app.mainMessage = 'Opening...'
 
@@ -307,38 +326,69 @@ def generateCharSprites(app):
 
 def chestsAndEscaping(app):
     rA, cA = getRowCol(app.margin, app.topMargin, app.survA.cx, app.survA.cy)
-    if app.chest1.isOpened or app.chest2.isOpened: # check game win
-        app.mainMessage = 'The Gate Has Opened'
-        app.gateOpened = True
+    rB, cB = getRowCol(app.margin, app.topMargin, app.survB.cx, app.survB.cy)
+    if app.gateOpened:
         for gateCell in app.gate:
-            gateCell.passable = True
             if rA == gateCell.row and cA == gateCell.col:
-                app.gameOver = True
-                app.escaped = True
-                app.mainMessage = 'You Escaped!'
-    elif not checkIfAround(rA, cA, app.chest1.row, app.chest1.col) and\
-        not checkIfAround(rA, cA, app.chest2.row, app.chest2.col): # do for either chest
-        app.chest1.survAIsAround = False
-        app.chest1.survAIsOpening = False
-        app.chest2.survAIsAround = False
-        app.chest2.survAIsOpening = False
-        app.mainMessage = 'Press Arrow Keys To Move'
-    else: # open chest
-        for chest in app.chestList: # do for evey chest
-            if checkIfAround(rA, cA, chest.row, chest.col) and\
-                not chest.survAIsOpening:
-                chest.survAIsAround = True
-                app.mainMessage = 'Press F to Open the Chest'
-            elif chest.survAIsOpening and time.time()-app.t0 >= 0.5:
-                app.t0 = time.time()
-                chest.percentage += 5
-                if chest.percentage >= 100:
-                    chest.isOpened = True
+                    app.gameOver = True
+                    app.escaped = True
+                    app.mainMessage = 'You Escaped!'
+    else: # when gate not opened open chest and check if it's opened
+        if not checkIfAround(rA, cA, app.chest1.row, app.chest1.col) and\
+            not checkIfAround(rA, cA, app.chest2.row, app.chest2.col): # for surv A message
+            app.chest1.survAIsAround = False
+            app.chest1.survAIsOpening = False
+            app.chest2.survAIsAround = False
+            app.chest2.survAIsOpening = False
+            app.mainMessage = 'Press Arrow Keys To Move'
+        else: # surv A progress
+            for chest in app.chestList:
+                if checkIfAround(rA, cA, chest.row, chest.col) and\
+                    not chest.survAIsOpening:
+                    chest.survAIsAround = True
+                    app.mainMessage = 'Press F to Open the Chest'
+                elif chest.survAIsOpening and time.time()-app.At0 >= 0.5:
+                    app.At0 = time.time()
+                    chest.percentage += chest.progPerSec
+        for chest in app.chestList: # surv B progress
+            if checkIfAround(rB, cB, chest.row, chest.col) and\
+                not chest.survBIsOpening: # around and not opening
+                app.Bt0 = time.time()
+                chest.survBIsOpening = True
+            elif not checkIfAround(rB, cB, chest.row, chest.col): # not around
+                chest.survBIsOpening = False
+            elif chest.survBIsOpening and time.time()-app.Bt0 >= 0.5: # increase progress
+                app.Bt0 = time.time()
+                chest.percentage += chest.progPerSec
+        for chest in app.chestList:# check chest percentage
+            if chest.percentage >= 100: # open the gate
+                        chest.percentage = 100
+                        chest.isOpened = True
+                        app.gateOpened = True
+                        app.mainMessage = 'The Gate Has Opened'
+                        for gateCell in app.gate: # make gate passable
+                            gateCell.passable = True
+
+def killerAI(app):
+    '''
+    if char is dying:
+        bring char to jail
+    elif no char in radius:
+        fixed route
+    elif char in radius and app.chaseT0 == 0:
+        app.chaseT0 == time.time() # start generating path per interval
+        # do search once here?
+    elif char in radius and time.time()-app.chaseT0>=app.killerSearchInterval:
+        app.chaseT0 = time.time()
+        (actionQueue == [])
+        update action Queue
+    '''
 
 def timerFired(app):
     if app.gameOver: return
     generateCharSprites(app) # animation
     chestsAndEscaping(app) # open chests and check for escape (win)
+    killerAI(app)
 
 #################################################
 # graphics
@@ -437,7 +487,7 @@ def redrawAll(app, canvas):
     drawWalls(app, canvas)
     drawChests(app, canvas)
     # draw25Grids(app, canvas)
-    # draw50Grids(app, canvas)
+    draw50Grids(app, canvas)
 
 #################################################
 # main

@@ -4,7 +4,6 @@ class Node:
     def __init__(self, parent=None, position=None):
         self.parent = parent
         self.position = position
-
         self.g = 0
         self.h = 0
         self.f = 0
@@ -31,41 +30,36 @@ def return_path(current_node,maze):
     return result
 
 def h(x0,y0,x1,y1):
+    # euclidean:
+    # return math.sqrt(((x0 - x1) ** 2) + ((y0 - y1) ** 2))
 
-    #euclidean:
-    #return math.sqrt(((x0 - x1) ** 2) + ((y0 - y1) ** 2))
+    # manhattan
+    # return abs(x0 - x1) + abs(y0 - y1)
 
-    #manhattan
-    #return abs(x0 - x1) + abs(y0 - y1)
-
-    #Cost-based search - Djkistra's first algo
+    # Cost-based search - Djkistra's first algo
     return 0
 
-def search(maze, cost, start, end):
+def search(maze, cost, start, end): # main code
     # Create start and end node with initized values for g, h and f
     start_node = Node(None, tuple(start))
-    start_node.g = start_node.h = start_node.f = 0
+    start_node.g = start_node.h = start_node.f = 0 # is this needed?
     end_node = Node(None, tuple(end))
-    end_node.g = end_node.h = end_node.f = 0
+    end_node.g = end_node.h = end_node.f = 0 # is this needed?
 
     # Initialize both yet_to_visit and visited list
-    # in this list we will put all node that are yet_to_visit for exploration. 
     # From here we will find the lowest cost node to expand next
-    yet_to_visit_list = []  
+    yet_to_visit_list = [] # 
     # in this list we will put all node those already explored so that we don't explore it again
     visited_list = [] 
     
     # Add the start node
     yet_to_visit_list.append(start_node)
     
-    # Adding a stop condition. This is to avoid any infinite loop and stop 
-    # execution after some reasonable number of steps
+    # Adding a stop condition to avoid infinite loop
     outer_iterations = 0
     max_iterations = (len(maze) // 2) ** 10
 
-    # what squares do we search . serarch movement is left-right-top-bottom 
-    #(4 movements) from every positon
-
+    # Search directions at a cell
     move  =  [[-1, 0 ], # go up
               [ 0, -1], # go left
               [ 1, 0 ], # go down
@@ -75,23 +69,19 @@ def search(maze, cost, start, end):
     no_rows, no_columns = len(maze), len(maze[0])
     
     # Loop until you find the end
-    
     while len(yet_to_visit_list) > 0:
-        
         # Every time any node is referred from yet_to_visit list, counter of limit operation incremented
         outer_iterations += 1    
 
-        
         # Get the current node
-        current_node = yet_to_visit_list[0]
+        current_node = yet_to_visit_list[0] # yet_to_visit_list contains children??
         current_index = 0
-        for index, item in enumerate(yet_to_visit_list):
+        for index, item in enumerate(yet_to_visit_list): # choose the lowest f node, otherwise just do the 0th
             if item.f < current_node.f:
                 current_node = item
                 current_index = index
                 
-        # if we hit this point return the path such as it may be no solution or 
-        # computation cost is too high
+        # Return when too many iterations
         if outer_iterations > max_iterations:
             print ("giving up on pathfinding too many iterations")
             return return_path(current_node,maze)
@@ -106,77 +96,72 @@ def search(maze, cost, start, end):
 
         # Generate children from all adjacent squares
         children = []
-
-        for new_position in move: 
-
+        for new_position in move: # move is global var !!
             # Get node position
             node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
-
-            # Make sure within range (check if within maze boundary)
+            # Make sure within maze boundary
             if (node_position[0] > (no_rows - 1) or 
                 node_position[0] < 0 or 
                 node_position[1] > (no_columns -1) or 
                 node_position[1] < 0):
                 continue
-
-            # Make sure walkable terrain
+            # Make sure no obstacle
             if maze[node_position[0]][node_position[1]] != 0:
                 continue
-
             # Create new node
             new_node = Node(current_node, node_position)
-
-            # Append
+            # Append ever walkable into children list of the current node
             children.append(new_node)
 
-        # Loop through children
-        for child in children:
-            
-            # Child is on the visited list (search entire visited list)
+        for child in children:# Loop through children
+            # If child in visited list then skip this children
             if len([visited_child for visited_child in visited_list if visited_child == child]) > 0:
                 continue
 
             # Create the f, g, and h values
-            child.g = current_node.g + cost
-            
-            #calculate the h
+            child.g = current_node.g + cost # certain cost values
+            # Calculate the h
             child.h = h(child.position[0],child.position[1],end_node.position[0],end_node.position[1])
 
-            # Child is already in the yet_to_visit list and g cost is already lower
+            # If child is already in the yet_to_visit list with a lower g (cuz we've been around it in a prev step)
             if len([i for i in yet_to_visit_list if child == i and child.g > i.g]) > 0:
-                continue
+                continue # don't add it to the yet_to_visit list
 
-            # Add the child to the yet_to_visit list
+            # Add the child to the yet_to_visit list (full)
             yet_to_visit_list.append(child)
 
-def getCellBounds(maze,row, col):
-    width = 400
-    height = 400
+def getCellBounds(maze, row, col):
+    width = 1200
+    height = 550
     cols = len(maze[0])
     rows = len(maze)
     cellWidth = width / cols
     cellHeight = height / rows
-
     x0 = col * cellWidth
     x1 = (col+1) * cellWidth
     y0 = row * cellHeight
     y1 = (row+1) * cellHeight
-
     return (x0, y0, x1, y1)
 
 def draw(canvas, width, height):
-    maze = [[0, 0, 0, 0, 0, 0, 1 ,0],
-            [0, 0, 0, 1, 0, 0, 1 ,0],
-            [0, 0, 0, 0, 0, 0, 1 ,0],
-            [0, 1, 0, 0, 0, 0, 1 ,0],
-            [0, 1, 0, 1, 1, 0, 1 ,0],
-            [0, 1, 0, 0, 0, 0, 0 ,0]]
-    
-    start = [0, 0] # starting position
-    end = [5,7] # ending position
-    cost = 1 # cost per movement
+    maze =  [[0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+            [0,1,0,0,0,0,0,0,0,0,1,0,1,1,1,1,1,1,0,0,1,0,1,1],
+            [0,0,1,1,1,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0],
+            [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0],
+            [1,1,1,1,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],
+            [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,1,1,1,1,1],
+            [0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0],
+            [0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0],
+            [0,0,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+            [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,0,0,1,0,0,0,0] ]
 
-    path = search(maze,cost, start, end)
+    start = [0, 0] # starting position
+    end = [0,12] # ending position max:[10, 23]
+    # limit max dist to 15?
+    # if can't return, don't just let it run
+    cost = 1 # cost per movemen
+    path = search(maze, cost, start, end)
 
     for row in range(len(path)):
         for col in range(len(path[0])):
@@ -194,4 +179,4 @@ def draw(canvas, width, height):
             
             canvas.create_rectangle(x0,y0,x1,y1,fill=color)
 
-basic_graphics.run(width=400, height=400)
+basic_graphics.run(width=1200, height=550)
