@@ -1,5 +1,6 @@
 ##converted demonstration from https://github.com/BaijayantaRoy/Medium-Article/blob/master/A_Star.ipynb
-import basic_graphics, math
+from cmu_112_graphics import *
+import time, random
 class Node:
     def __init__(self, parent=None, position=None):
         self.parent = parent
@@ -9,8 +10,35 @@ class Node:
         self.f = 0
     def __eq__(self, other):
         return self.position == other.position
-
+def getCellBounds(margin, topMargin, row, col):
+    x1 = margin + col*50
+    x2 = margin + (col+1)*50
+    y1 = topMargin + row*50
+    y2 = topMargin + (row+1)*50
+    return x1, y1, x2, y2
 #This function return the path of the search
+
+def appStarted(app):
+    # basic display
+    app.topMargin = 80
+    app.margin = 20
+    app.start = [3, 3]
+    app.end = [0,7]
+    app.cost = 1
+    app.path = [[]]
+    app.t0 = time.time()
+    app.maze =  [[0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+                [0,1,0,0,0,0,0,0,0,0,1,0,1,1,1,1,1,1,0,0,1,0,1,1],
+                [0,0,1,1,1,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0],
+                [1,1,1,1,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,1,1,1,1,1],
+                [0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0],
+                [0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0],
+                [0,0,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,0,0,1,0,0,0,0]]
+
 def return_path(current_node,maze):
     path = []
     no_rows, no_columns = len(maze), len(maze[0])
@@ -39,7 +67,7 @@ def h(x0,y0,x1,y1):
     # Cost-based search - Djkistra's first algo
     return 0
 
-def search(maze, cost, start, end): # main code
+def search(app, maze, cost, start, end): # main code
     # Create start and end node with initized values for g, h and f
     start_node = Node(None, tuple(start))
     start_node.g = start_node.h = start_node.f = 0 # is this needed?
@@ -130,47 +158,35 @@ def search(maze, cost, start, end): # main code
             # Add the child to the yet_to_visit list (full)
             yet_to_visit_list.append(child)
 
-def getCellBounds(maze, row, col):
-    width = 1200
-    height = 550
-    cols = len(maze[0])
-    rows = len(maze)
-    cellWidth = width / cols
-    cellHeight = height / rows
-    x0 = col * cellWidth
-    x1 = (col+1) * cellWidth
-    y0 = row * cellHeight
-    y1 = (row+1) * cellHeight
-    return (x0, y0, x1, y1)
+def timerFired(app): # new added
+    dirs = [(1,0), (0,-1), (-1,0), (0,1)]
+    endR, endC = tuple(app.end)
+    if time.time() - app.t0 >= 0.1:
+        while True: # random imitation of target movement
+            index = random.randint(0,3)
+            dr, dc = dirs[index]
+            endR = app.end[0] + dr
+            endC = app.end[1] + dc
+            if endR + endC >= 14:
+                endR, endC = tuple(app.end)
+                break
+            if 0<=endR<len(app.maze) and 0<=endC<len(app.maze[0])\
+            and (app.maze[endR][endC] == 0):
+                break
+        app.end = [endR, endC]
+        app.t0 = time.time()
+        app.path = search(app, app.maze, app.cost, app.start, app.end)
 
-def draw(canvas, width, height):
-    maze =  [[0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
-            [0,1,0,0,0,0,0,0,0,0,1,0,1,1,1,1,1,1,0,0,1,0,1,1],
-            [0,0,1,1,1,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0],
-            [1,1,1,1,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,1,1,1,1,1],
-            [0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0],
-            [0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0],
-            [0,0,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,0,0,1,0,0,0,0] ]
-
-    start = [0, 0] # starting position
-    end = [0,12] # ending position max:[10, 23]
-    # limit max dist to 15?
-    # if can't return, don't just let it run
-    cost = 1 # cost per movemen
-    path = search(maze, cost, start, end)
-
+def redrawAll(app, canvas):
+    path = search(app, app.maze, app.cost, app.start, app.end)
     for row in range(len(path)):
         for col in range(len(path[0])):
-            x0,y0,x1,y1 = getCellBounds(maze,row, col)
-            if [row,col] == start:
+            x0,y0,x1,y1 = getCellBounds(app.margin, app.topMargin, row, col)
+            if [row,col] == app.start:
                 color = "green"
-            elif [row,col] == end:
+            elif [row,col] == app.end:
                 color = "red"
-            elif maze[row][col] == 1:
+            elif app.maze[row][col] == 1:
                 color = "blue"
             elif path[row][col] == -1:
                 color = "white"
@@ -179,4 +195,7 @@ def draw(canvas, width, height):
             
             canvas.create_rectangle(x0,y0,x1,y1,fill=color)
 
-basic_graphics.run(width=1200, height=550)
+#################################################
+# main
+#################################################
+runApp(width=1240, height=650)
