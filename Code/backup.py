@@ -1,5 +1,5 @@
 from cmu_112_graphics import *
-import time
+import time, copy
 #################################################
 # helpers
 #################################################
@@ -20,6 +20,12 @@ def checkIfAround(r1, c1, r2, c2):
     if gridDist(r1, c1, r2, c2) == 1: return True
     elif abs(r1-r2) == 1 and abs(c1-c2) == 1: return True
     return False
+def getFirstStep(route): # pop
+    stepList = []
+    for i in range(4):
+        stepList.append(route[0])
+    route.pop(0)
+    return stepList
 #################################################
 # create classes
 #################################################
@@ -42,12 +48,14 @@ class Chest(Obstacle):
         self.cx = (self.x1+self.x2)/2
         self.cy = (self.y1+self.x2)/2
         self.percentage = 0
+        self.progPerSec = 5
         self.survAIsAround = False
         self.survAIsOpening = False
+        self.survBIsOpening = False
         self.opening = False
         self.isOpened = False
     def getMessage(self):
-        return f'Opening Process  {self.percentage}/100%'
+        return f'Opening Process  {self.percentage}%'
 class PassableObs(Obstacle):
     def __init__(self, row, col, r, g, b):
         super().__init__(row, col)
@@ -79,6 +87,20 @@ class Killer(Char):
         super().__init__(cx, cy)
         self.rx = 15 # width = 30
         self.ry = 21 # height = 42
+        self.target = None
+        self.isPatrolling = False
+        self.mutablePRoute = [(0,1), (0,1), (0,1), (0,1), (0,1),
+                            (-1,0), (-1,0), (-1,0), (-1,0), (-1,0), (-1,0),
+                            (0,-1), (0,-1), (0,-1), (0,-1), (0,-1),
+                            (1,0), (1,0),
+                            (0,-1), (0,-1),
+                            (-1,0), (-1,0),
+                            (0,-1), (0,-1),
+                            (1,0),
+                            (0,-1),
+                            (1,0), (1,0), (1,0), (1,0), (1,0), (1,0),
+                            (0,1), (0,1), (0,1), (0,1), (0,1),
+                            (-1,0)]
     def makeAttackSprites(self, file, x1, y1, x2, y2, numOfFrames, upDown):
         # attack animation method only for killer
         spritestrip = Image.open(file)
@@ -114,19 +136,39 @@ def appStarted(app):
     app.topMargin = 80
     app.margin = 20
     app.mainMessage = 'Press Arrow Keys To Move'
+    # game settings (partial)
+    app.At0 = 0
+    app.Bt0 = 0
+    app.chaseT0 = 0
+    app.patrolT0 = 0
+    app.killerSearchInterval = 3
+    # search related (vars used in A* lab)
+    app.patrolRoute = [(0,1), (0,1), (0,1), (0,1), (0,1),
+                       (-1,0), (-1,0), (-1,0), (-1,0), (-1,0), (-1,0),
+                       (0,-1), (0,-1), (0,-1), (0,-1), (0,-1),
+                       (1,0), (1,0),
+                       (0,-1), (0,-1),
+                       (-1,0), (-1,0),
+                       (0,-1), (0,-1),
+                       (1,0),
+                       (0,-1),
+                       (1,0), (1,0), (1,0), (1,0), (1,0), (1,0),
+                       (0,1), (0,1), (0,1), (0,1), (0,1),
+                       (-1,0)]
+    app.end = []
+    app.stepList = []
     # game booleans
-    app.t0 = 0
     app.gateOpened = False
     app.gameOver = False
     app.escaped = False
     app.lost = False
     # create characters with init position
     app.charList = []
-    app.killer = Killer(app.margin+(23*25-12.5), app.topMargin+(17*25-12.5))
+    app.killer = Killer(app.margin+(23*25), app.topMargin+(17*25))
     app.charList.append(app.killer)
-    app.survA = Survivor(app.margin+(12*25-12.5), app.topMargin+(10*25-12.5))
+    app.survA = Survivor(app.margin+(11*25), app.topMargin+(9*25))
     app.charList.append(app.survA)
-    app.survB = Survivor(app.margin+(37*25-12.5), app.topMargin+(8*25-12.5))
+    app.survB = Survivor(app.margin+(37*25), app.topMargin+(7*25))
     app.charList.append(app.survB)
     # create walking animation sprite
     # parameters: x1, y1, x2, y2, frame, upDown, isKiller
@@ -211,6 +253,7 @@ def inObstacle(app, obs, x, y, char): # used in move fcn
                 obs.y1 <= y + char.ry <= obs.y2)
 
 def move(app, char, dx, dy): # move when valid
+    char.isMoving = True
     char.cx += dx
     char.cy += dy
     for obs in app.obsList: # check if char in normal obstacle
@@ -228,20 +271,32 @@ def move(app, char, dx, dy): # move when valid
     elif char.cy < char.ry + app.topMargin \
         or char.cy > app.height - char.ry - app.margin: # check y bounds
         char.cy -= dy
+    if dx > 0: char.isFacingRight = True
+    elif dx < 0: char.isFacingRight = False
+
+def cheatKeys(app, event):
+    if event.key.lower() == 'r': # can restart and any time
+        appStarted(app)
+    if event.key == '1': # open gate by opening chest 1
+        app.chest1.percentage = 100
+    if event.key == '3': # teleport surv A to chest 1
+        app.survA.cx = app.margin + 75
+        app.survA.cy = app.topMargin + 125
+    if event.key == '4': # teleport surv A to chest 2
+        app.survA.cx = app.width - app.margin - 75 
+        app.survA.cy = app.topMargin + 425
 
 def keyPressed(app, event):
+    cheatKeys(app, event)
     if app.gameOver: return
     # move survA direction key
     if event.key == 'Left' or event.key == 'Right' or event.key == 'Up'\
         or event.key == 'Down':
         app.survA.t0 = time.time() # record input time
-        app.survA.isMoving = True
         if event.key == 'Left':
             move(app, app.survA, -app.survA.speed, 0)
-            app.survA.isFacingRight = False
         elif event.key == 'Right':
             move(app, app.survA, app.survA.speed, 0)
-            app.survA.isFacingRight = True
         elif event.key == 'Up':
             move(app, app.survA, 0, -app.survA.speed)
         elif event.key == 'Down':
@@ -250,13 +305,10 @@ def keyPressed(app, event):
     if event.key.lower() == 'a' or event.key.lower() == 'd'\
         or event.key.lower() == 'w' or event.key.lower() == 's':
         app.survB.t0 = time.time() # record input time
-        app.survB.isMoving = True
         if event.key.lower() == 'a':
             move(app, app.survB, -app.survB.speed, 0)
-            app.survB.isFacingRight = False
         elif event.key.lower() == 'd':
             move(app, app.survB, app.survB.speed, 0)
-            app.survB.isFacingRight = True
         elif event.key.lower() == 'w':
             move(app, app.survB, 0, -app.survB.speed)
         elif event.key.lower() == 's':
@@ -266,13 +318,10 @@ def keyPressed(app, event):
         event.key.lower() == 'i' or event.key.lower() == 'k' or\
             event.key == 'Space') and app.killer.isAttacking == False:
         app.killer.t0 = time.time() # record input time
-        app.killer.isMoving = True
         if event.key.lower() == 'j':
             move(app, app.killer, -app.killer.speed, 0)
-            app.killer.isFacingRight = False
         elif event.key.lower() == 'l':
             move(app, app.killer, app.killer.speed, 0)
-            app.killer.isFacingRight = True
         elif event.key.lower() == 'i':
             move(app, app.killer, 0, -app.killer.speed)
         elif event.key.lower() == 'k':
@@ -282,7 +331,7 @@ def keyPressed(app, event):
             # app.killer.isMoving = False # attack animation speeds up a bit
     for chest in app.chestList: # doesn't distinguish
         if chest.survAIsAround and (event.key.lower() == 'f'):
-            app.t0 = time.time()
+            app.At0 = time.time()
             chest.survAIsOpening = True
             app.mainMessage = 'Opening...'
 
@@ -307,38 +356,116 @@ def generateCharSprites(app):
 
 def chestsAndEscaping(app):
     rA, cA = getRowCol(app.margin, app.topMargin, app.survA.cx, app.survA.cy)
-    if app.chest1.isOpened or app.chest2.isOpened: # check game win
-        app.mainMessage = 'The Gate Has Opened'
-        app.gateOpened = True
+    rB, cB = getRowCol(app.margin, app.topMargin, app.survB.cx, app.survB.cy)
+    if app.gateOpened:
         for gateCell in app.gate:
-            gateCell.passable = True
             if rA == gateCell.row and cA == gateCell.col:
-                app.gameOver = True
-                app.escaped = True
-                app.mainMessage = 'You Escaped!'
-    elif not checkIfAround(rA, cA, app.chest1.row, app.chest1.col) and\
-        not checkIfAround(rA, cA, app.chest2.row, app.chest2.col): # do for either chest
-        app.chest1.survAIsAround = False
-        app.chest1.survAIsOpening = False
-        app.chest2.survAIsAround = False
-        app.chest2.survAIsOpening = False
-        app.mainMessage = 'Press Arrow Keys To Move'
-    else: # open chest
-        for chest in app.chestList: # do for evey chest
-            if checkIfAround(rA, cA, chest.row, chest.col) and\
-                not chest.survAIsOpening:
-                chest.survAIsAround = True
-                app.mainMessage = 'Press F to Open the Chest'
-            elif chest.survAIsOpening and time.time()-app.t0 >= 0.5:
-                app.t0 = time.time()
-                chest.percentage += 5
-                if chest.percentage >= 100:
-                    chest.isOpened = True
+                    app.gameOver = True
+                    app.escaped = True
+                    app.mainMessage = 'You Escaped!'
+    else: # when gate not opened open chest and check if it's opened
+        if not checkIfAround(rA, cA, app.chest1.row, app.chest1.col) and\
+            not checkIfAround(rA, cA, app.chest2.row, app.chest2.col): # for surv A message
+            app.chest1.survAIsAround = False
+            app.chest1.survAIsOpening = False
+            app.chest2.survAIsAround = False
+            app.chest2.survAIsOpening = False
+            app.mainMessage = 'Press Arrow Keys To Move'
+        else: # surv A progress
+            for chest in app.chestList:
+                if checkIfAround(rA, cA, chest.row, chest.col) and\
+                    not chest.survAIsOpening:
+                    chest.survAIsAround = True
+                    app.mainMessage = 'Press F to Open the Chest'
+                elif chest.survAIsOpening and time.time()-app.At0 >= 0.5:
+                    app.At0 = time.time()
+                    chest.percentage += chest.progPerSec
+        for chest in app.chestList: # surv B progress
+            if checkIfAround(rB, cB, chest.row, chest.col) and\
+                not chest.survBIsOpening: # around and not opening
+                app.Bt0 = time.time()
+                chest.survBIsOpening = True
+            elif not checkIfAround(rB, cB, chest.row, chest.col): # not around
+                chest.survBIsOpening = False
+            elif chest.survBIsOpening and time.time()-app.Bt0 >= 0.5: # increase progress
+                app.Bt0 = time.time()
+                chest.percentage += chest.progPerSec
+        for chest in app.chestList:# check chest percentage
+            if chest.percentage >= 100: # open the gate
+                        chest.percentage = 100
+                        chest.isOpened = True
+                        app.gateOpened = True
+                        app.mainMessage = 'The Gate Has Opened'
+                        for gateCell in app.gate: # make gate passable
+                            gateCell.passable = True
+
+def patrol(app):
+    dr, dc = app.stepList.pop(0)
+    move(app, app.killer, dc*app.killer.speed, dr*app.killer.speed)
+    if len(app.stepList) == 0:
+        if len(app.killer.mutablePRoute) == 0:
+            app.killer.mutablePRoute = copy.deepcopy(app.patrolRoute) # second cycle
+        app.stepList = getFirstStep(app.killer.mutablePRoute) # move to next cell
+
+def killerAI(app):
+    rA, cA = getRowCol(app.margin, app.topMargin, app.survA.cx, app.survA.cy)
+    rB, cB = getRowCol(app.margin, app.topMargin, app.survB.cx, app.survB.cy)
+    rK, cK = getRowCol(app.margin, app.topMargin, app.killer.cx, app.killer.cy)
+    if not checkIfAround(rA, cA, rK, cK) and not checkIfAround(rB, cB, rK, cK): # no one around
+        app.killer.target = None
+        if app.killer.isPatrolling and time.time()-app.patrolT0 > 0.1\
+            and not app.killer.isAttacking:
+            patrol(app) # take step of patrolling (1/4 cell)
+        elif rK == 8 and cK == 11 and not app.killer.isPatrolling: # start patrolling
+            app.patrolT0 = time.time()
+            app.killer.isPatrolling = True
+            app.killer.mutablePRoute = copy.deepcopy(app.patrolRoute) # initialize patrol route
+            app.stepList = getFirstStep(app.killer.mutablePRoute)
+        elif rK != 8 or cK != 11: # write this after chasing alg
+            app.end = [8, 11]
+            # do search
+            # next move = only take the first step
+            # move killer along next move
+
+    '''
+    if no char in radius:
+        set target to none
+        if on start point of fixed route, start patrolling
+        else: move to start point of patrolling
+    elif (have char and) have target and is target dying: # bring char to jail
+        if not arrived yet:
+            move killer towards the cell beside jail
+            char.cx, char.cy = killer.cx, killer.cy
+        if arrived:
+            char.cx, char.cy = (some place in jail)
+            if char.jailCount == 1:
+                game over = Ture
+                lost = True
+            elif char.jailCount == 0:
+                char.kailCount = 1
+                char.status = healthy
+                killer.target = None
+    elif (have char and) don't have target:
+        if both:
+            closer one is target
+        elif A:
+            set A as target
+        elif B:
+            set B as target
+    else: (have char and) have target and target not dying
+        if both:
+            target = None # have char and don't have target condition will take care of this
+        else:
+            do search
+            next move = only take the first step
+            move killer along next move
+    '''
 
 def timerFired(app):
     if app.gameOver: return
     generateCharSprites(app) # animation
     chestsAndEscaping(app) # open chests and check for escape (win)
+    killerAI(app)
 
 #################################################
 # graphics
@@ -432,12 +559,14 @@ def draw50Grids(app, canvas):
 def redrawAll(app, canvas):
     drawBasicScreen(app, canvas)
     drawPassableObs(app, canvas)
+    drawWalls(app, canvas)
     for char in app.charList:
         drawChar(app, canvas, char)
-    drawWalls(app, canvas)
     drawChests(app, canvas)
+    # need a draw path fcn
+
     # draw25Grids(app, canvas)
-    # draw50Grids(app, canvas)
+    draw50Grids(app, canvas)
 
 #################################################
 # main

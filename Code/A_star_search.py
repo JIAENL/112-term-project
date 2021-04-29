@@ -46,15 +46,25 @@ def return_path(current_node,maze): # trace back the path
     while current is not None:
         path.append(current.position)
         current = current.parent
+    path = path[::-1] # make it from start to end: [row,col], [row,col], ...
+    return path
+    ''' generate the whole map version
+    path = []
+    result = [[-1 for i in range(len(maze[0]))] for j in range(len(maze))] # -1 means not part of the path
+    current = copy.deepcopy(current_node)
+    while current is not None:
+        path.append(current.position)
+        current = current.parent
     path = path[::-1] # make it from start to end
     for i in range(len(path)): # mark the path on result board
         result[path[i][0]][path[i][1]] = 2
+    return result
+    '''
     # not needed (make the path an increasing sequence on result board)
     # start_value = 0
     # for i in range(len(path)):
     #     result[path[i][0]][path[i][1]] = start_value
     #     start_value += 1
-    return result
 
 def h(x0,y0,x1,y1):
     return abs(x0 - x1) + abs(y0 - y1) # manhattan
@@ -113,46 +123,46 @@ def search(app, maze, cost, start, end): # main code
                 continue # if child in wantToVisitList and already has a lower g, don't add it to the wantToVisitList list
             wantToVisitList.append(child)
 
-def timerFired(app): # new added
-    dirs = [(1,0), (0,-1), (-1,0), (0,1)]
-    endR, endC = tuple(app.end)
-    if time.time() - app.t0 >= 0.1:
-        while True: # random imitation of target movement
-            index = random.randint(0,3)
-            dr, dc = dirs[index]
-            endR = app.end[0] + dr
-            endC = app.end[1] + dc
-            if endR + endC >= 14:
-                endR, endC = tuple(app.end)
-                break
-            if 0<=endR<len(app.maze) and 0<=endC<len(app.maze[0])\
-            and (app.maze[endR][endC] == 0):
-                break
-        app.end = [endR, endC]
-        app.t0 = time.time()
-        app.path = search(app, app.maze, app.cost, app.start, app.end)
-        # app.start change to [rK, cK]
-        # app.end = target row, target col (when chasing)
-        # app.end = [8, 11]
+# def timerFired(app): # new added
+#     dirs = [(1,0), (0,-1), (-1,0), (0,1)]
+#     endR, endC = tuple(app.end)
+#     if time.time() - app.t0 >= 0.1:
+#         while True: # random imitation of target movement
+#             index = random.randint(0,3)
+#             dr, dc = dirs[index]
+#             endR = app.end[0] + dr
+#             endC = app.end[1] + dc
+#             if endR + endC >= 14:
+#                 endR, endC = tuple(app.end)
+#                 break
+#             if 0<=endR<len(app.maze) and 0<=endC<len(app.maze[0])\
+#             and (app.maze[endR][endC] == 0):
+#                 break
+#         app.end = [endR, endC]
+#         app.t0 = time.time()
+#         app.path = search(app, app.maze, app.cost, app.start, app.end)
+#         # app.start change to [rK, cK]
+#         # app.end = target row, target col (when chasing)
+#         # app.end = [8, 11]
 
-def redrawAll(app, canvas):
-    if len(app.path) == 0: return
-    for row in range(len(app.path)):
-        for col in range(len(app.path[0])):
-            x0,y0,x1,y1 = getCellBounds(app.margin, app.topMargin, row, col)
-            if [row,col] == app.start:
-                color = "green"
-            elif [row,col] == app.end:
-                color = "red"
-            elif app.maze[row][col] == 1: # later delete when move to main code
-                color = "blue"
-            elif app.path[row][col] == -1:
-                color = "white"
-            else:
-                color = "black"
-            canvas.create_rectangle(x0,y0,x1,y1,fill=color)
+# def redrawAll(app, canvas):
+#     if len(app.path) == 0: return
+#     for row in range(len(app.path)):
+#         for col in range(len(app.path[0])):
+#             x0,y0,x1,y1 = getCellBounds(app.margin, app.topMargin, row, col)
+#             if [row,col] == app.start:
+#                 color = "green"
+#             elif [row,col] == app.end:
+#                 color = "red"
+#             elif app.maze[row][col] == 1: # later delete when move to main code
+#                 color = "blue"
+#             elif app.path[row][col] == -1:
+#                 color = "white"
+#             else:
+#                 color = "black"
+#             canvas.create_rectangle(x0,y0,x1,y1,fill=color)
 
 #################################################
 # main
 #################################################
-runApp(width=1240, height=650)
+# runApp(width=1240, height=650)
