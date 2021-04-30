@@ -48,23 +48,6 @@ def return_path(current_node,maze): # trace back the path
         current = current.parent
     path = path[::-1] # make it from start to end: [row,col], [row,col], ...
     return path
-    ''' generate the whole map version
-    path = []
-    result = [[-1 for i in range(len(maze[0]))] for j in range(len(maze))] # -1 means not part of the path
-    current = copy.deepcopy(current_node)
-    while current is not None:
-        path.append(current.position)
-        current = current.parent
-    path = path[::-1] # make it from start to end
-    for i in range(len(path)): # mark the path on result board
-        result[path[i][0]][path[i][1]] = 2
-    return result
-    '''
-    # not needed (make the path an increasing sequence on result board)
-    # start_value = 0
-    # for i in range(len(path)):
-    #     result[path[i][0]][path[i][1]] = start_value
-    #     start_value += 1
 
 def h(x0,y0,x1,y1):
     return abs(x0 - x1) + abs(y0 - y1) # manhattan

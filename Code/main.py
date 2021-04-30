@@ -474,6 +474,7 @@ def bringToJail(app):
             app.killer.target.jailCount += 1
             if app.killer.target.jailCount == 2 and app.killer.target.name == 'survA': # if survA in jail twice
                 app.survA.isDead = True
+                app.mainMessage = 'Game over! You did not escape...'
                 app.gameOver = True
                 app.lost = True
                 return
@@ -534,6 +535,7 @@ def killerAI(app):
             rT, cT = getRowCol(app.margin, app.topMargin, app.killer.target.cx, app.killer.target.cy)
             if checkInDist(rA, cA, rK, cK, app.killer.detectDist) and\
                 checkInDist(rB, cB, rK, cK, app.killer.detectDist) and\
+                not app.survA.inJail and not app.survB.inJail and\
                 len(app.stepList) == 4 and\
                 (rK!=rA and rK!=rB and cK!=cA and cK!=cB): # both then re-select (not in same cell)
                 app.killer.target = None
@@ -543,6 +545,7 @@ def killerAI(app):
                     app.killer.target.isInjured = True
                     app.killer.isPaused = True
                     app.pauseTimer = time.time()
+                    app.killer.target = None
                 else:
                     app.killer.target.isInjured = False
                     app.killer.target.isDying = True
@@ -554,8 +557,7 @@ def killerAI(app):
                         app.cost, app.start,app.end)
                     app.killer.mutablePRoute = absToRelPath(app, pathInRC) # make absolute path to relative
                     app.stepList = getFirstStep(app.killer.mutablePRoute)
-                    print(app.killer.mutablePRoute)
-            elif time.time() - app.chaseT0 >= 0.1: # chase!!!
+            elif time.time() - app.chaseT0 >= 0.1 and len(app.stepList) != 0: # chase!!!
                 chase(app)
         
         elif app.killer.target == None: # no current target
@@ -564,19 +566,20 @@ def killerAI(app):
                 if gridDist(rA, cA, rK, cK) <= gridDist(rB, cB, rK, cK) and\
                     not app.survA.inJail:
                     app.killer.target = app.survA
-                    app.end = [rA, cA]
                 elif gridDist(rA, cA, rK, cK) > gridDist(rB, cB, rK, cK) and\
                     not app.survB.inJail:
                     app.killer.target = app.survB
-                    app.end = [rB, cB]
             elif checkInDist(rA, cA, rK, cK, app.killer.detectDist) and\
                 not app.survA.inJail: # A around and not in jail
                 app.killer.target = app.survA
-                app.end = [rA, cA]
             elif checkInDist(rB, cB, rK, cK, app.killer.detectDist) and\
                 not app.survB.inJail: # B around and not in jail
                 app.killer.target = app.survB
-                app.end = [rB, cB]
+            if app.killer.target == None: return
+            rT, cT = getRowCol(app.margin, app.topMargin, app.killer.target.cx, app.killer.target.cy)
+            if rK == rT and cK == cT: return
+            # after choosing target, if killer and target already in same cell, attack (pass)
+            app.end = [rT, cT]
             app.chaseT0 = time.time()
             app.start = [rK, cK]
             pathInRC = AS.search(app, app.map, app.cost, app.start, app.end)
@@ -710,4 +713,5 @@ runApp(width=1240, height=650)
 Assets Cited:
 https://penusbmic.itch.io/sci-fi-character-pack-12
 https://maytch.itch.io/free-32x64-kanako-platformer-character-sprite-set
+https://robertoanta.itch.io/free-rpg-wooden
 '''
