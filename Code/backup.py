@@ -1,4 +1,5 @@
 from cmu_112_graphics import *
+import A_star_search as AS
 import time, copy
 #################################################
 # helpers
@@ -20,12 +21,21 @@ def checkIfAround(r1, c1, r2, c2):
     if gridDist(r1, c1, r2, c2) == 1: return True
     elif abs(r1-r2) == 1 and abs(c1-c2) == 1: return True
     return False
+def checkInDist(r1, c1, r2, c2, dist):
+    return gridDist(r1, c1, r2, c2) <= dist
 def getFirstStep(route): # pop
     stepList = []
     for i in range(4):
         stepList.append(route[0])
     route.pop(0)
     return stepList
+def absToRelPath(app, pathInRC):
+    result = []
+    for i in range(1, len(pathInRC)):
+        r = pathInRC[i][0] - pathInRC[i-1][0]
+        c = pathInRC[i][1] - pathInRC[i-1][1]
+        result.append([r,c])
+    return result
 #################################################
 # create classes
 #################################################
@@ -87,8 +97,10 @@ class Killer(Char):
         super().__init__(cx, cy)
         self.rx = 15 # width = 30
         self.ry = 21 # height = 42
+        self.detectDist = 5
         self.target = None
         self.isPatrolling = False
+        self.isPaused = False # brief pause after attack
         self.mutablePRoute = [(0,1), (0,1), (0,1), (0,1), (0,1),
                             (-1,0), (-1,0), (-1,0), (-1,0), (-1,0), (-1,0),
                             (0,-1), (0,-1), (0,-1), (0,-1), (0,-1),
@@ -127,7 +139,15 @@ class Survivor(Char):
         else: return 'Status: Healthy'
     def getJailCountMessage(self):
         return f'Jail Count: {self.jailCount}/2'
-
+class Node:
+    def __init__(self, parent=None, position=None):
+        self.parent = parent
+        self.position = position
+        self.g = 0
+        self.h = 0
+        self.f = 0
+    def __eq__(self, other):
+        return self.position == other.position
 #################################################
 # start app
 #################################################
@@ -141,6 +161,7 @@ def appStarted(app):
     app.Bt0 = 0
     app.chaseT0 = 0
     app.patrolT0 = 0
+    app.pauseTimer = 0
     app.killerSearchInterval = 3
     # search related (vars used in A* lab)
     app.patrolRoute = [(0,1), (0,1), (0,1), (0,1), (0,1),
@@ -155,7 +176,20 @@ def appStarted(app):
                        (1,0), (1,0), (1,0), (1,0), (1,0), (1,0),
                        (0,1), (0,1), (0,1), (0,1), (0,1),
                        (-1,0)]
+    app.map = [[0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+               [0,1,0,0,0,0,0,0,0,0,1,0,1,1,1,1,1,1,0,0,1,0,1,1],
+               [0,0,1,1,1,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0],
+               [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0],
+               [1,1,1,1,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],
+               [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,1,1,1,1,1],
+               [0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0],
+               [0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0],
+               [0,0,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+               [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+               [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,0,0,1,0,0,0,0]]
+    app.start = []
     app.end = []
+    app.cost = 1
     app.stepList = []
     # game booleans
     app.gateOpened = False
@@ -271,7 +305,7 @@ def move(app, char, dx, dy): # move when valid
     elif char.cy < char.ry + app.topMargin \
         or char.cy > app.height - char.ry - app.margin: # check y bounds
         char.cy -= dy
-    if dx > 0: char.isFacingRight = True
+    if dx > 0: char.isFacingRight = True # for animation sprites
     elif dx < 0: char.isFacingRight = False
 
 def cheatKeys(app, event):
@@ -285,13 +319,21 @@ def cheatKeys(app, event):
     if event.key == '4': # teleport surv A to chest 2
         app.survA.cx = app.width - app.margin - 75 
         app.survA.cy = app.topMargin + 425
+    if event.key == '5': # teleport surv B to chest 1
+        app.survB.cx = app.margin + 75
+        app.survB.cy = app.topMargin + 125
+    if event.key == '6': # teleport surv B to chest 2
+        app.survB.cx = app.width - app.margin - 75 
+        app.survB.cy = app.topMargin + 425
+    if event.key == '7':
+        app.survA.isDying = not app.survA.isDying
 
 def keyPressed(app, event):
     cheatKeys(app, event)
     if app.gameOver: return
     # move survA direction key
-    if event.key == 'Left' or event.key == 'Right' or event.key == 'Up'\
-        or event.key == 'Down':
+    if (event.key == 'Left' or event.key == 'Right' or event.key == 'Up'\
+        or event.key == 'Down') and not app.survA.isDying:
         app.survA.t0 = time.time() # record input time
         if event.key == 'Left':
             move(app, app.survA, -app.survA.speed, 0)
@@ -407,59 +449,87 @@ def patrol(app):
             app.killer.mutablePRoute = copy.deepcopy(app.patrolRoute) # second cycle
         app.stepList = getFirstStep(app.killer.mutablePRoute) # move to next cell
 
+def chase(app):
+    dr, dc = app.stepList.pop(0)
+    move(app, app.killer, dc*app.killer.speed, dr*app.killer.speed)
+    if len(app.stepList) == 0:
+        if len(app.killer.mutablePRoute) == 0: # re-search
+            rK, cK = getRowCol(app.margin, app.topMargin, app.killer.cx, app.killer.cy)
+            rT, cT = getRowCol(app.margin, app.topMargin, app.killer.target.cx, app.killer.target.cy)
+            app.start = [rK, cK]
+            app.end = [rT, cT]
+            pathInRC = AS.search(app, app.map, app.cost, app.start, app.end)
+            app.killer.mutablePRoute = absToRelPath(app, pathInRC)
+        app.stepList = getFirstStep(app.killer.mutablePRoute) # move to next cell
+
 def killerAI(app):
+    if app.killer.isPaused and time.time() - app.pauseTimer <= 3:
+        return
+    elif app.killer.isPaused and time.time() - app.pauseTimer > 3:
+        app.killer.isPaused = False
     rA, cA = getRowCol(app.margin, app.topMargin, app.survA.cx, app.survA.cy)
     rB, cB = getRowCol(app.margin, app.topMargin, app.survB.cx, app.survB.cy)
     rK, cK = getRowCol(app.margin, app.topMargin, app.killer.cx, app.killer.cy)
-    if not checkIfAround(rA, cA, rK, cK) and not checkIfAround(rB, cB, rK, cK): # no one around
+    if (not checkInDist(rA, cA, rK, cK, app.killer.detectDist) and\
+        not checkInDist(rB, cB, rK, cK, app.killer.detectDist)) or\
+        (app.killer.isPatrolling and len(app.stepList) != 4): # no one around (make sure end in the middle of cell)
         app.killer.target = None
         if app.killer.isPatrolling and time.time()-app.patrolT0 > 0.1\
-            and not app.killer.isAttacking:
+            and not app.killer.isAttacking: # need to finish 4 steps before detecting target
             patrol(app) # take step of patrolling (1/4 cell)
         elif rK == 8 and cK == 11 and not app.killer.isPatrolling: # start patrolling
             app.patrolT0 = time.time()
             app.killer.isPatrolling = True
             app.killer.mutablePRoute = copy.deepcopy(app.patrolRoute) # initialize patrol route
             app.stepList = getFirstStep(app.killer.mutablePRoute)
-        elif rK != 8 or cK != 11: # write this after chasing alg
+        elif rK != 8 or cK != 11: # write this after chasing alg (move killer to start point)
+            app.start = [rK, cK]
             app.end = [8, 11]
             # do search
             # next move = only take the first step
             # move killer along next move
-
-    '''
-    if no char in radius:
-        set target to none
-        if on start point of fixed route, start patrolling
-        else: move to start point of patrolling
-    elif (have char and) have target and is target dying: # bring char to jail
-        if not arrived yet:
-            move killer towards the cell beside jail
-            char.cx, char.cy = killer.cx, killer.cy
-        if arrived:
-            char.cx, char.cy = (some place in jail)
-            if char.jailCount == 1:
-                game over = Ture
-                lost = True
-            elif char.jailCount == 0:
-                char.kailCount = 1
-                char.status = healthy
-                killer.target = None
-    elif (have char and) don't have target:
-        if both:
-            closer one is target
-        elif A:
-            set A as target
-        elif B:
-            set B as target
-    else: (have char and) have target and target not dying
-        if both:
-            target = None # have char and don't have target condition will take care of this
-        else:
-            do search
-            next move = only take the first step
-            move killer along next move
-    '''
+    else: # have char around and killer finished moving
+        app.killer.isPatrolling = False
+        if app.killer.target != None and app.killer.target.isDying:
+            pass # bring char to jail
+        elif app.killer.target != None:
+            rT, cT = getRowCol(app.margin, app.topMargin, app.killer.target.cx, app.killer.target.cy)
+            if checkInDist(rA, cA, rK, cK, app.killer.detectDist) and\
+                checkInDist(rB, cB, rK, cK, app.killer.detectDist) and\
+                len(app.stepList) == 4 and\
+                (rK!=rA and rK!=rB and cK!=cA and cK!=cB): # both then re-select (not in same cell)
+                app.killer.target = None
+            elif rK == rT and cK == cT:
+                app.killer.isAttacking = True # attack animation
+                if not app.killer.target.isInjured:
+                    app.killer.target.isInjured = True
+                    app.killer.isPaused = True
+                    app.pauseTimer = time.time()
+                else:
+                    app.killer.target.isInjured = False
+                    app.killer.target.isDying = True
+            elif time.time() - app.chaseT0 >= 0.1:
+                chase(app)
+        elif app.killer.target == None:
+            if checkInDist(rA, cA, rK, cK, app.killer.detectDist) and\
+                checkInDist(rB, cB, rK, cK, app.killer.detectDist): # both
+                if gridDist(rA, cA, rK, cK) <= gridDist(rB, cB, rK, cK):
+                    app.killer.target = app.survA
+                    app.end = [rA, cA]
+                else:
+                    app.killer.target = app.survB
+                    app.end = [rB, cB]
+            elif checkInDist(rA, cA, rK, cK, app.killer.detectDist): # A around
+                app.killer.target = app.survA
+                app.end = [rA, cA]
+            elif checkInDist(rB, cB, rK, cK, app.killer.detectDist): # B around
+                app.killer.target = app.survB
+                app.end = [rB, cB]
+            app.chaseT0 = time.time()
+            app.start = [rK, cK]
+            pathInRC = AS.search(app, app.map, app.cost, app.start, app.end)
+            app.killer.mutablePRoute = absToRelPath(app, pathInRC) # make absolute path to relative
+            app.stepList = getFirstStep(app.killer.mutablePRoute)
 
 def timerFired(app):
     if app.gameOver: return
