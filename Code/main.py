@@ -15,6 +15,12 @@ def getRowCol(margin, topMargin, x, y): # check boundary? nah
     col = (x - margin)//50
     row = (y - topMargin)//50
     return int(row), int(col)
+def inObstacle(app, obs, x, y, char): # used in move fcn
+    # change to obs.x1+char.rx <= x <= obs.x2-char.rx
+    return (obs.x1 <= x <= obs.x2 or obs.x1 <= x - char.rx <= obs.x2 or\
+        obs.x1 <= x + char.rx <= obs.x2) and (obs.y1 <= y <= obs.y2 or\
+            obs.y1 <= y - char.ry <= obs.y2 or\
+                obs.y1 <= y + char.ry <= obs.y2)
 def gridDist(r1, c1, r2, c2):
     return abs(r1-r2) + abs(c1-c2)
 def checkIfAround(r1, c1, r2, c2):
@@ -31,10 +37,15 @@ def getFirstStep(route): # pop
     return stepList
 def absToRelPath(app, pathInRC):
     result = []
-    for i in range(1, len(pathInRC)):
-        r = pathInRC[i][0] - pathInRC[i-1][0]
-        c = pathInRC[i][1] - pathInRC[i-1][1]
-        result.append([r,c])
+    for i in range(len(pathInRC)):
+        if i == 0: # first one compare with start
+            r = pathInRC[i][0] - app.start[0]
+            c = pathInRC[i][1] - app.start[1]
+        else: # rest compare with previous one
+            r = pathInRC[i][0] - pathInRC[i-1][0]
+            c = pathInRC[i][1] - pathInRC[i-1][1]
+        if r != 0 or c != 0:
+            result.append([r,c])
     return result
 #################################################
 # create classes
@@ -101,6 +112,7 @@ class Killer(Char):
         self.detectDist = 5
         self.target = None
         self.isPatrolling = False
+        self.isReturning = False
         self.isDraggin = False
         self.isPaused = False # brief pause after attack
         self.mutablePRoute = [(0,1), (0,1), (0,1), (0,1), (0,1),
@@ -158,8 +170,9 @@ def appStarted(app):
     app.chaseT0 = 0
     app.dragT0 = 0
     app.patrolT0 = 0
+    app.returnT0 = 0
     app.jailT0 = 0
-    app.inJailTime = 2 # pop out after __ seconds
+    app.inJailTime = 10 # pop out after __ seconds
     app.pauseTimer = 0
     app.killerSearchInterval = 3
     # search related (vars used in A* lab)
@@ -277,13 +290,6 @@ def appStarted(app):
     app.chest2 = Chest(9,22)
     app.chestList = [app.chest1, app.chest2]
     app.obsList += [app.chest1, app.chest2]
-
-def inObstacle(app, obs, x, y, char): # used in move fcn
-    # change to obs.x1+char.rx <= x <= obs.x2-char.rx
-    return (obs.x1 <= x <= obs.x2 or obs.x1 <= x - char.rx <= obs.x2 or\
-        obs.x1 <= x + char.rx <= obs.x2) and (obs.y1 <= y <= obs.y2 or\
-            obs.y1 <= y - char.ry <= obs.y2 or\
-                obs.y1 <= y + char.ry <= obs.y2)
 
 def move(app, char, dx, dy): # move when valid
     char.isMoving = True
@@ -448,8 +454,24 @@ def patrol(app):
             app.killer.mutablePRoute = copy.deepcopy(app.patrolRoute) # second cycle
         app.stepList = getFirstStep(app.killer.mutablePRoute) # move to next cell
 
+def returning(app):
+    try:
+        dr, dc = app.stepList.pop(0)
+    except:
+        app.stepList = [[0, 0]]
+        dr, dc = app.stepList.pop(0)
+    move(app, app.killer, dc*app.killer.speed, dr*app.killer.speed)
+    if len(app.stepList) == 0:
+        if len(app.killer.mutablePRoute) == 0:
+            return
+        app.stepList = getFirstStep(app.killer.mutablePRoute) # move to next cell
+
 def chase(app):
-    dr, dc = app.stepList.pop(0)
+    try:
+        dr, dc = app.stepList.pop(0)
+    except:
+        app.stepList = [[0, 0]]
+        dr, dc = app.stepList.pop(0)
     move(app, app.killer, dc*app.killer.speed, dr*app.killer.speed)
     if len(app.stepList) == 0:
         if len(app.killer.mutablePRoute) == 0: # re-search
@@ -464,6 +486,8 @@ def chase(app):
 
 def bringToJail(app):
     dr, dc = app.stepList.pop(0)
+    app.killer.target.cx = app.killer.cx
+    app.killer.target.cy = app.killer.cy
     move(app, app.killer, dc*app.killer.speed, dr*app.killer.speed)
     move(app, app.killer.target, dc*app.killer.speed, dr*app.killer.speed)
     if len(app.stepList) == 0:
@@ -481,7 +505,6 @@ def bringToJail(app):
             elif app.killer.target.jailCount == 2: # surv B dies --> disappear
                 app.survB.isDead = True
                 app.charList.remove(app.survB)
-                return
             app.killer.target.isDying = False
             app.jailT0 = time.time()
             app.killer.isDragging = False
@@ -513,17 +536,25 @@ def killerAI(app):
         if app.killer.isPatrolling and time.time()-app.patrolT0 > 0.1\
             and not app.killer.isAttacking: # need to finish 4 steps before detecting target
             patrol(app) # take step of patrolling (1/4 cell)
-        elif rK == 8 and cK == 11 and not app.killer.isPatrolling: # start patrolling
+        elif rK == 8 and cK == 11 and not app.killer.isPatrolling and\
+            len(app.stepList) in {0,4}: # start patrolling
             app.patrolT0 = time.time()
+            app.killer.isReturning = False
             app.killer.isPatrolling = True
             app.killer.mutablePRoute = copy.deepcopy(app.patrolRoute) # initialize patrol route
             app.stepList = getFirstStep(app.killer.mutablePRoute)
-        elif rK != 8 or cK != 11: # write this after chasing alg (move killer to start point)
+        elif (rK != 8 or cK != 11) and not app.killer.isReturning and\
+            len(app.stepList) in {0,4}: # start returning to patrolling origin by search
             app.start = [rK, cK]
             app.end = [8, 11]
-            # do search
-            # next move = only take the first step
-            # move killer along next move
+            app.returnT0 = time.time()
+            app.killer.isReturning = True
+            pathInRC = AS.search(app, app.map, app.cost, app.start, app.end)
+            app.killer.mutablePRoute = absToRelPath(app, pathInRC)
+            app.stepList = getFirstStep(app.killer.mutablePRoute)
+        elif app.killer.isReturning and time.time()-app.returnT0 > 0.1: # return to origin
+            returning(app)
+
     # if have survivors around and killer finished moving
     else:
         app.killer.isPatrolling = False
@@ -536,7 +567,7 @@ def killerAI(app):
             if checkInDist(rA, cA, rK, cK, app.killer.detectDist) and\
                 checkInDist(rB, cB, rK, cK, app.killer.detectDist) and\
                 not app.survA.inJail and not app.survB.inJail and\
-                len(app.stepList) == 4 and\
+                len(app.stepList) in {0,4} and\
                 (rK!=rA and rK!=rB and cK!=cA and cK!=cB): # both then re-select (not in same cell)
                 app.killer.target = None
             elif rK == rT and cK == cT and len(app.stepList) == 0: # attack!!!
@@ -557,7 +588,7 @@ def killerAI(app):
                         app.cost, app.start,app.end)
                     app.killer.mutablePRoute = absToRelPath(app, pathInRC) # make absolute path to relative
                     app.stepList = getFirstStep(app.killer.mutablePRoute)
-            elif time.time() - app.chaseT0 >= 0.1 and len(app.stepList) != 0: # chase!!!
+            elif time.time() - app.chaseT0 >= 0.1: # chase!!!
                 chase(app)
         
         elif app.killer.target == None: # no current target
