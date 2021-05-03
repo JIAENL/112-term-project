@@ -47,6 +47,15 @@ def absToRelPath(app, start, pathInRC):
         if r != 0 or c != 0:
             result.append([r,c])
     return result
+def generateBPos(app):
+    L = [(app.margin+(37*25), app.topMargin+(7*25)), # col 18 row 3
+        (app.margin+(23*25), app.topMargin+(7*25)), # col 11 row 3
+        (app.margin+(33*25), app.topMargin+(9*25)), # col 16 row 4
+        (app.margin+(27*25), app.topMargin+(11*25)), # col 13 row 5
+        (app.margin+(47*25), app.topMargin+(9*25)), # col 23 row 4
+        (app.margin+(15*25), app.topMargin+(19*25)) # col 7 row 9
+        ]
+    return random.choice(L)
 #################################################
 # create classes
 #################################################
@@ -220,14 +229,19 @@ def appStarted(app):
     app.gameOver = False
     app.escaped = False
     app.lost = False
+    app.gamePaused = False
     # create characters with init position
     app.charList = []
     app.killer = Killer('killer', app.margin+(23*25), app.topMargin+(17*25))
     app.charList.append(app.killer)
     app.survA = Survivor('survA', app.margin+(11*25), app.topMargin+(9*25))
     app.charList.append(app.survA)
-    app.survB = Survivor('survB', app.margin+(37*25), app.topMargin+(7*25))
+    x, y = generateBPos(app)
+    app.survB = Survivor('survB', x, y)
     app.charList.append(app.survB)
+        # non random ver
+        # app.survB = Survivor('survB', app.margin+(37*25), app.topMargin+(7*25))
+        # app.charList.append(app.survB)
     # create walking animation sprite
     # parameters: x1, y1, x2, y2, frame, upDown, isKiller
     app.killer.makeSprites('move without FX.png',
@@ -328,6 +342,8 @@ def move(app, char, dx, dy): # move when valid
 def cheatKeys(app, event):
     if event.key.lower() == 'r': # can restart and any time
         appStarted(app)
+    if event.key.lower() == 'p': # can restart and any time
+        app.gamePaused = not app.gamePaused
     if event.key == '1': # open gate by opening chest 1
         app.chest1.percentage = 100
     if event.key == '3': # teleport surv A to chest 1
@@ -475,7 +491,9 @@ def bringToJail(app):
     app.killer.target.cx = app.killer.cx
     app.killer.target.cy = app.killer.cy
     move(app, app.killer, dc*app.killer.speed, dr*app.killer.speed)
-    move(app, app.killer.target, dc*app.killer.speed, dr*app.killer.speed)
+    app.killer.target.cx = app.killer.cx
+    app.killer.target.cy = app.killer.cy
+    # move(app, app.killer.target, dc*app.killer.speed, dr*app.killer.speed)
     if len(app.stepList) == 0:
         if len(app.killer.mutablePRoute) == 0: # arrived at jail
             app.killer.target.inJail = True
@@ -626,8 +644,6 @@ def killerAI(app):
             pathInRC = AS.search(app, app.map, app.cost, app.start, app.end)
             app.killer.mutablePRoute = absToRelPath(app, app.start, pathInRC) # make absolute path to relative
             app.stepList = getFirstStep(app.killer.mutablePRoute)
-    if 2 <= rK <= 5 and 9 <= cK <= 12:
-        print(app.killer.target, app.killer.isPatrolling)
 
 def jailCountDown(app):
     if app.survA.inJail and time.time()-app.jailT0 >= app.inJailTime:
@@ -684,15 +700,14 @@ def listValidMovesFromList(app, rB, cB, dirs):
 
 def findMaxWalkableD(app, rB, cB, unitDx, dx, rOrC):
     if rOrC == 'c':
-        print('c')
         for i in range(1, 2*abs(dx) + 1):
-            if app.map[rB][cB + -i*unitDx] != 0:
+            if cB + -i*unitDx < 0 or cB + -i*unitDx >= len(app.map[0]) and\
+            app.map[rB][cB + -i*unitDx] != 0:
                 return i - 1
     else:
-        print('r')
         for i in range(1, 2*abs(dx) + 1):
-            print(app.map[rB + -i*unitDx][cB])
-            if app.map[rB + -i*unitDx][cB] != 0:
+            if rB + -i*unitDx < 0 or rB + -i*unitDx >= len(app.map) and\
+            app.map[rB + -i*unitDx][cB] != 0:
                 return i - 1
     return 2*abs(dx)
 
@@ -745,7 +760,6 @@ def survBAI(app):
                 else: # dr and dc both not walkable
                     maxCell = findMaxWalkableD(app, rB, cB, unitDr, dr, 'r')
                     app.BStepList = [(-unitDr,0)]*maxCell*4
-                    print(app.BStepList)
             else: # if dc not walkable and dr == 0: randomly choose from list of valid move 
                 # create list of valid move (from up down)
                 L = listValidMovesFromList(app, rB, cB, [(1,0),(-1,0)])
@@ -781,6 +795,7 @@ def survBAI(app):
 
 def timerFired(app):
     if app.gameOver: return
+    if app.gamePaused: return
     jailCountDown(app)
     generateCharSprites(app) # animation
     chestsAndEscaping(app) # open chests and check for escape (win)
