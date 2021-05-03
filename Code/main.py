@@ -342,8 +342,6 @@ def cheatKeys(app, event):
     if event.key == '6': # teleport surv B to chest 2
         app.survB.cx = app.width - app.margin - 75 
         app.survB.cy = app.topMargin + 425
-    if event.key == 'j':
-        app.survA.isDying = not app.survA.isDying
 
 def keyPressed(app, event):
     cheatKeys(app, event)
@@ -360,18 +358,6 @@ def keyPressed(app, event):
             move(app, app.survA, 0, -app.survA.speed)
         elif event.key == 'Down':
             move(app, app.survA, 0, app.survA.speed)
-    # move survB awsd
-    if event.key.lower() == 'a' or event.key.lower() == 'd'\
-        or event.key.lower() == 'w' or event.key.lower() == 's':
-        app.survB.t0 = time.time() # record input time
-        if event.key.lower() == 'a':
-            move(app, app.survB, -app.survB.speed, 0)
-        elif event.key.lower() == 'd':
-            move(app, app.survB, app.survB.speed, 0)
-        elif event.key.lower() == 'w':
-            move(app, app.survB, 0, -app.survB.speed)
-        elif event.key.lower() == 's':
-            move(app, app.survB, 0, app.survB.speed)
     # survA opens chest
     for chest in app.chestList: # doesn't distinguish
         if chest.survAIsAround and (event.key.lower() == 'f'):
@@ -538,6 +524,7 @@ def killerAI(app):
         # 4. only A is around but in jail
         # 5. only B is around but in jail
         app.killer.target = None
+        app.killer.detectDist = 5
         # if time interval pass, take patrolling step (1/4 cell)
         if app.killer.isPatrolling and time.time()-app.patrolT0 > 0.1\
             and not app.killer.isAttacking:
@@ -583,6 +570,7 @@ def killerAI(app):
                 len(app.stepList) in {0,4} and\
                 (rK!=rA and rK!=rB and cK!=cA and cK!=cB):
                 app.killer.target = None
+                app.killer.detectDist = 5
             # if in same cell and finished animation then attack
             elif rK == rT and cK == cT and len(app.stepList) == 0: # attack!!!
                 app.killer.isAttacking = True 
@@ -631,12 +619,15 @@ def killerAI(app):
             # if K and T already in same cell, want to attack (return)
             if rK == rT and cK == cT: return
             # if have chasable target, start chasing:
+            app.killer.detectDist = 6
             app.end = [rT, cT]
             app.chaseT0 = time.time()
             app.start = [rK, cK]
             pathInRC = AS.search(app, app.map, app.cost, app.start, app.end)
             app.killer.mutablePRoute = absToRelPath(app, app.start, pathInRC) # make absolute path to relative
             app.stepList = getFirstStep(app.killer.mutablePRoute)
+    if 2 <= rK <= 5 and 9 <= cK <= 12:
+        print(app.killer.target, app.killer.isPatrolling)
 
 def jailCountDown(app):
     if app.survA.inJail and time.time()-app.jailT0 >= app.inJailTime:
@@ -670,22 +661,40 @@ def escape(app):
     if len(app.BStepList) == 0:
         app.survB.isEscaping = False
 
-def randomBStepList(app, r, c):
-    dirs = [(1,0),(-1,0),(0,1),(0,-1)]
+def randomBStepList(app, r, c, dirs):
     while True:
-        index = random.randint(0,3)
+        index = random.randint(0,len(dirs)-1)
         dr, dc = dirs[index]
         newR = r+dr
-        newC = r+dc
+        newC = c+dc
         if 0<=newR<len(app.map) and 0<=newC<len(app.map[0]) and\
         app.map[newR][newC] == 0: # ok
             app.BStepList = [(dr,dc),(dr,dc),(dr,dc),(dr,dc)]
             break
 
-def findMaxWalkableD(app, rB, cB, unitDc, dc):
-    for i in range(1, 2*abs(dc) + 1):
-        if app.map[rB][cB + -i*unitDc] != 0:
-            return i - 1
+def listValidMovesFromList(app, rB, cB, dirs):
+    result = []
+    for dr, dc in dirs:
+        newR = rB+dr
+        newC = cB+dc
+        if 0<=newR<len(app.map) and 0<=newC<len(app.map[0]) and\
+        app.map[newR][newC] == 0:
+            result.append((dr,dc))
+    return result
+
+def findMaxWalkableD(app, rB, cB, unitDx, dx, rOrC):
+    if rOrC == 'c':
+        print('c')
+        for i in range(1, 2*abs(dx) + 1):
+            if app.map[rB][cB + -i*unitDx] != 0:
+                return i - 1
+    else:
+        print('r')
+        for i in range(1, 2*abs(dx) + 1):
+            print(app.map[rB + -i*unitDx][cB])
+            if app.map[rB + -i*unitDx][cB] != 0:
+                return i - 1
+    return 2*abs(dx)
 
 def survBAI(app):
     rB, cB = getRowCol(app.margin, app.topMargin, app.survB.cx, app.survB.cy)
@@ -701,7 +710,7 @@ def survBAI(app):
         dr, dc = rB-rK, cB-cK
         # if both == 0 (in the same cell as K): randomly select a movable direction
         if dr == dc and dr == 0:
-            randomBStepList(app, rB, cB)
+            randomBStepList(app, rB, cB, [(1,0),(-1,0),(0,1),(0,-1)])
 
         # if delta row is greater: dr walkable / dr not but dc walkable / no dc / both nah
         elif abs(dr) >= abs(dc):
@@ -715,27 +724,32 @@ def survBAI(app):
                 if 0<=newC<len(app.map[0]) and app.map[rB][newC] == 0: # if dc walkable: go dc
                     app.BStepList = [(0,unitDc),(0,unitDc),(0,unitDc),(0,unitDc)]
                 else: # dr and dc both not walkable
-                    maxCell = findMaxWalkableD(app, rB, cB, unitDc, dc)
-                    app.BStepList = [(0,unitDc)]*maxCell*4
-            else: # if dr not walkable and dc == 0: random
-                randomBStepList(app, rB, cB)
+                    maxCell = findMaxWalkableD(app, rB, cB, unitDc, dc, 'c')
+                    app.BStepList = [(0,-unitDc)]*maxCell*4
+            else: # if dr not walkable and dc == 0: randomly choose from list of valid move
+                # create list of valid move (from left right)
+                L = listValidMovesFromList(app, rB, cB, [(0,1),(0,-1)])
+                randomBStepList(app, rB, cB, L)
         
         # if delta col is greater: go dc for one cell
         elif abs(dr) < abs(dc):
             unitDc = dc//abs(dc)
             newC = cB + unitDc
-            if 0<=newC<len(app.map[0]) and app.map[rB][newC] == 0: # if dr walkable: go dr
+            if 0<=newC<len(app.map[0]) and app.map[rB][newC] == 0: # if dc walkable: go dc
                 app.BStepList = [(0,unitDc),(0,unitDc),(0,unitDc),(0,unitDc)]
-            elif dr != 0: # if dr not walkable and dc != 0: try dc
+            elif dr != 0: # if dc not walkable and dr != 0: try dr
                 unitDr = dr//abs(dr)
                 newR = rB + unitDr
-                if 0<=newR<len(app.map) and app.map[newR][cB] == 0: # if dc walkable: go dc
+                if 0<=newR<len(app.map) and app.map[newR][cB] == 0: # if dr walkable: go dr
                     app.BStepList = [(unitDr,0),(unitDr,0),(unitDr,0),(unitDr,0)]
                 else: # dr and dc both not walkable
-                    maxCell = findMaxWalkableD(app, rB, cB, unitDr, dr)
-                    app.BStepList = [(unitDr,0)]*maxCell*4
-            else: # if dr not walkable and dc == 0: random
-                randomBStepList(app, rB, cB)
+                    maxCell = findMaxWalkableD(app, rB, cB, unitDr, dr, 'r')
+                    app.BStepList = [(-unitDr,0)]*maxCell*4
+                    print(app.BStepList)
+            else: # if dc not walkable and dr == 0: randomly choose from list of valid move 
+                # create list of valid move (from up down)
+                L = listValidMovesFromList(app, rB, cB, [(1,0),(-1,0)])
+                randomBStepList(app, rB, cB, L)
 
     # if is escaping and time interval passed: take step
     elif app.survB.isEscaping and time.time()-app.escapeT0 >= 0.1:
