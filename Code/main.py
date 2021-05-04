@@ -227,6 +227,9 @@ def appStarted(app):
     app.jailImage = image.resize((50, 50))
     image = Image.open('gate.png')
     app.gateImage = image.resize((50, 50))
+    app.lightImage = Image.open('light.png')
+    app.lightsOff = True
+    app.blackColor = rgbString(10, 13, 16)
     # for killer
     app.start = []
     app.end = []
@@ -370,6 +373,8 @@ def cheatKeys(app, event):
     if event.key == '6': # teleport surv B to chest 2
         app.survB.cx = app.width - app.margin - 75 
         app.survB.cy = app.topMargin + 425
+    if event.key == 'l': # teleport surv B to chest 2
+        app.lightsOff = not app.lightsOff
 
 def keyPressed(app, event):
     cheatKeys(app, event)
@@ -877,31 +882,44 @@ def drawBasicScreen(app, canvas):
     canvas.create_rectangle(app.margin, app.topMargin,
         app.width - app.margin, app.height - app.margin, outline = 'black')
     canvas.create_text(app.width//2, app.topMargin//2,
-            text=app.mainMessage, font='Ariel 20', fill='white')
+            text=app.mainMessage, font='Courier 20', fill='white')
     # chest info
     canvas.create_text(app.margin, app.topMargin//4, anchor='w',
-        text=f'Chest 1 {app.chest1.getMessage()}', font='Ariel 20', fill='white') # chest 1
+        text=f'Chest 1 {app.chest1.getMessage()}', font='Courier 20', fill='white') # chest 1
     canvas.create_text(app.margin, app.topMargin*(3/4), anchor='w',
-        text=f'Chest 2 {app.chest2.getMessage()}', font='Ariel 20', fill='white') # chest 2
+        text=f'Chest 2 {app.chest2.getMessage()}', font='Courier 20', fill='white') # chest 2
     # survivor A status
-    canvas.create_text(app.width-13*app.margin,app.topMargin//4,
-        anchor='e', text='P1', font='Ariel 15', fill='white') 
+    canvas.create_text(app.width-14*app.margin,app.topMargin//4,
+        anchor='e', text='P1', font='Courier 15', fill='white') 
     canvas.create_text(app.width-11*app.margin,app.topMargin*(2/4),
-        anchor='e', text=app.survA.getHealthMessage(), font='Ariel 15', fill='white') 
+        anchor='e', text=app.survA.getHealthMessage(), font='Courier 15', fill='white') 
     canvas.create_text(app.width-11*app.margin,app.topMargin*(3/4),
-        anchor='e', text=app.survA.getJailCountMessage(), font='Ariel 15', fill='white') 
+        anchor='e', text=app.survA.getJailCountMessage(), font='Courier 15', fill='white') 
     # survivor B status
-    canvas.create_text(app.width-3*app.margin,app.topMargin//4,
-        anchor='e', text='P2', font='Ariel 15', fill='white') 
+    canvas.create_text(app.width-4*app.margin,app.topMargin//4,
+        anchor='e', text='P2', font='Courier 15', fill='white') 
     canvas.create_text(app.width-1*app.margin,app.topMargin*(2/4),
-        anchor='e', text=app.survB.getHealthMessage(), font='Ariel 15', fill='white') 
+        anchor='e', text=app.survB.getHealthMessage(), font='Courier 15', fill='white') 
     canvas.create_text(app.width-1*app.margin,app.topMargin*(3/4),
-        anchor='e', text=app.survB.getJailCountMessage(), font='Ariel 15', fill='white') 
+        anchor='e', text=app.survB.getJailCountMessage(), font='Courier 15', fill='white') 
 
 def drawBackground(app, canvas):
     canvas.create_image(app.width//2,
         app.height//2 + (app.topMargin-app.margin),
         image=ImageTk.PhotoImage(app.floorImage))
+
+def drawLight(app, canvas):
+    if app.lightsOff:
+        canvas.create_image(app.survA.cx, app.survA.cy,
+            image=ImageTk.PhotoImage(app.lightImage))
+        canvas.create_rectangle(0,0,app.width, app.survA.cy-111,
+            fill=app.blackColor) # top
+        canvas.create_rectangle(0,app.survA.cy+111,app.width, app.height,
+            fill=app.blackColor) # bottom
+        canvas.create_rectangle(0,app.survA.cy-111,app.survA.cx-111, app.survA.cy+111,
+            fill=app.blackColor) # left
+        canvas.create_rectangle(app.survA.cx+111,app.survA.cy-111,app.width,app.survA.cy+111,
+            fill=app.blackColor) # right
 
 def draw25Grids(app, canvas):
     for row in range(23):
@@ -924,6 +942,7 @@ def redrawAll(app, canvas):
     for char in app.charList:
         drawChar(app, canvas, char)
     drawChests(app, canvas)
+    drawLight(app, canvas)
     drawBasicScreen(app, canvas)
 
     # draw25Grids(app, canvas)
