@@ -4,9 +4,6 @@ import time, copy, random
 #################################################
 # helpers
 #################################################
-def BGImageMaker(app, file):
-    image = Image.open(file)
-    return image.resize((1300, 650))
 def rgbString(r, g, b): return f'#{r:02x}{g:02x}{b:02x}' # from: https://www.cs.cmu.edu/~112/notes/notes-graphics.html
 def getCellBounds(margin, topMargin, row, col):
     x1 = margin + col*50
@@ -90,10 +87,11 @@ class Chest(Obstacle):
     def getMessage(self):
         return f'Opening Process  {self.percentage}%'
 class PassableObs(Obstacle):
-    def __init__(self, row, col, r, g, b):
+    def __init__(self, row, col, r, g, b, image):
         super().__init__(row, col)
         self.color = rgbString(r, g, b)
         self.passable = False
+        self.image = image
 class Char(object):
     def __init__(self, name, cx, cy):
         self.name = name
@@ -220,7 +218,15 @@ def appStarted(app):
                [0,0,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
                [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
                [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,0,0,1,0,0,0,0]]
-    app.floorImage = BGImageMaker(app, 'MakingMap1.png')
+    # create obstacle and background images
+    image = Image.open('MakingMap1.png')
+    app.floorImage = image.resize((1300, 650))
+    image = Image.open('wall.png')
+    app.wallImage = image.resize((50, 50))
+    image = Image.open('jail.png')
+    app.jailImage = image.resize((50, 50))
+    image = Image.open('gate.png')
+    app.gateImage = image.resize((50, 50))
     # for killer
     app.start = []
     app.end = []
@@ -310,12 +316,12 @@ def appStarted(app):
     app.gate = []
     #   jail {row:(0,1) col:(22,23) rgb:(161, 66, 100)} 
     #   gate {row:(10) col:(10,11,12,13,14) rgb:(160, 191, 115)}
-    app.jail += [PassableObs(0,22, 161, 66, 100),
-        PassableObs(0,23, 161, 66, 100),PassableObs(1,22, 161, 66, 100),
-        PassableObs(1,23, 161, 66, 100)]
-    app.gate += [PassableObs(10,10, 160, 191, 115),
-        PassableObs(10,11, 160, 191, 115),PassableObs(10,12, 160, 191, 115),
-        PassableObs(10,13, 160, 191, 115),PassableObs(10,14, 160, 191, 115)]
+    app.jail += [PassableObs(0,22, 161, 66, 100,app.jailImage),
+        PassableObs(0,23, 161, 66, 100,app.jailImage),PassableObs(1,22, 161, 66, 100,app.jailImage),
+        PassableObs(1,23, 161, 66, 100,app.jailImage)]
+    app.gate += [PassableObs(10,10, 160, 191, 115,app.gateImage),
+        PassableObs(10,11, 160, 191, 115,app.gateImage),PassableObs(10,12, 160, 191, 115,app.gateImage),
+        PassableObs(10,13, 160, 191, 115,app.gateImage),PassableObs(10,14, 160, 191, 115,app.gateImage)]
     app.passableObs += [app.jail, app.gate]
     # chest: append in obsList
     app.chest1 = Chest(1,1)
@@ -837,14 +843,14 @@ def drawChar(app, canvas, char):
 
 def drawWalls(app, canvas):
     for obs in app.obsList:
-        canvas.create_rectangle(obs.x1, obs.y1,
-            obs.x2, obs.y2, fill=app.wallColor, outline=app.wallColor)
+        canvas.create_image((obs.x1+obs.x2)//2, (obs.y1+obs.y2)//2,
+            image=ImageTk.PhotoImage(app.wallImage))
 
 def drawPassableObs(app, canvas):
     for lst in app.passableObs:
         for obs in lst:
-            canvas.create_rectangle(obs.x1, obs.y1,
-                obs.x2, obs.y2, fill=obs.color, outline=obs.color)
+            canvas.create_image((obs.x1+obs.x2)//2, (obs.y1+obs.y2)//2,
+            image=ImageTk.PhotoImage(obs.image))
 
 def drawChests(app, canvas):
     # adapted from: https://www.cs.cmu.edu/~112/notes/notes-animations-part4.html#loadImageUsingUrl
