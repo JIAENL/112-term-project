@@ -78,7 +78,7 @@ class Chest(Obstacle):
         self.cx = (self.x1+self.x2)/2
         self.cy = (self.y1+self.x2)/2
         self.percentage = 0
-        self.progPerSec = 5
+        self.progPerSec = 1
         self.survAIsAround = False
         self.survAIsOpening = False
         self.survBIsOpening = False
@@ -99,6 +99,7 @@ class Char(object):
         self.cy = cy
         self.speed = 12.5
         self.t0 = 0
+        self.isFreezed = False
         self.isMoving = False
         self.isAttacking = False # stay here cuz draw fcn loop thru char
         self.isFacingRight = True
@@ -125,15 +126,17 @@ class Killer(Char):
         self.isReturning = False
         self.isDraggin = False
         self.isPaused = False # brief pause after attack
-        self.mutablePRoute = [(0,1), (0,1), (0,1), (0,1), (0,1),
+        self.mutablePRoute =[(0,1), (0,1), (0,1), (0,1), (0,1), (0,1),
                             (-1,0), (-1,0), (-1,0), (-1,0), (-1,0), (-1,0),
-                            (0,-1), (0,-1), (0,-1), (0,-1), (0,-1),
+                            (0,-1), (0,-1), (0,-1), (0,-1), (0,-1), (0,-1),
                             (1,0), (1,0),
                             (0,-1), (0,-1),
-                            (-1,0), (-1,0),
+                            (-1,0), (-1,0), (-1,0),
+                            (0,-1), (0,-1), (0,-1), (0,-1), (0,-1), (0,-1), (0,-1),
+                            (-1,0),
                             (0,-1), (0,-1),
-                            (1,0),
-                            (0,-1),
+                            (1,0), (1,0), (1,0),
+                            (0,1), (0,1), (0,1), (0,1), (0,1), (0,1),
                             (1,0), (1,0), (1,0), (1,0), (1,0), (1,0),
                             (0,1), (0,1), (0,1), (0,1), (0,1),
                             (-1,0)]
@@ -195,18 +198,21 @@ def appStarted(app):
     app.pauseTimer = 0
     app.killerSearchInterval = 3
     # search related (vars used in A* lab)
-    app.patrolRoute = [(0,1), (0,1), (0,1), (0,1), (0,1),
-                       (-1,0), (-1,0), (-1,0), (-1,0), (-1,0), (-1,0),
-                       (0,-1), (0,-1), (0,-1), (0,-1), (0,-1),
-                       (1,0), (1,0),
-                       (0,-1), (0,-1),
-                       (-1,0), (-1,0),
-                       (0,-1), (0,-1),
-                       (1,0),
-                       (0,-1),
-                       (1,0), (1,0), (1,0), (1,0), (1,0), (1,0),
-                       (0,1), (0,1), (0,1), (0,1), (0,1),
-                       (-1,0)]
+    app.patrolRoute =   [(0,1), (0,1), (0,1), (0,1), (0,1), (0,1),
+                        (-1,0), (-1,0), (-1,0), (-1,0), (-1,0), (-1,0),
+                        (0,-1), (0,-1), (0,-1), (0,-1), (0,-1), (0,-1),
+                        (1,0), (1,0),
+                        (0,-1), (0,-1),
+                        (-1,0), (-1,0), (-1,0),
+                        (0,-1), (0,-1), (0,-1), (0,-1), (0,-1), (0,-1), (0,-1),
+                        (-1,0),
+                        (0,-1), (0,-1),
+                        (1,0), (1,0), (1,0),
+                        (0,1), (0,1), (0,1), (0,1), (0,1), (0,1),
+                        (1,0), (1,0), (1,0), (1,0), (1,0), (1,0),
+                        (0,1), (0,1), (0,1), (0,1), (0,1),
+                        (-1,0)]
+
     app.map = [[0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
                [0,1,0,0,0,0,0,0,0,0,1,0,1,1,1,1,1,1,0,0,1,0,1,1],
                [0,0,1,1,1,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0],
@@ -217,7 +223,7 @@ def appStarted(app):
                [0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0],
                [0,0,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
                [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
-               [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,0,0,1,0,0,0,0]]
+               [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,1,0,0,0,0]]
     # create obstacle and background images
     image = Image.open('MakingMap1.png')
     app.floorImage = image.resize((1300, 650))
@@ -373,8 +379,12 @@ def cheatKeys(app, event):
     if event.key == '6': # teleport surv B to chest 2
         app.survB.cx = app.width - app.margin - 75 
         app.survB.cy = app.topMargin + 425
-    if event.key == 'l': # teleport surv B to chest 2
+    if event.key == 'l': # toggle light
         app.lightsOff = not app.lightsOff
+    if event.key == 'k': # freeze killer
+        app.killer.isFreezed = not app.killer.isFreezed
+    if event.key == 'b': # freeze survB
+        app.survB.isFreezed = not app.survB.isFreezed
 
 def keyPressed(app, event):
     cheatKeys(app, event)
@@ -654,7 +664,7 @@ def killerAI(app):
             # if K and T already in same cell, want to attack (return)
             if rK == rT and cK == cT: return
             # if have chasable target, start chasing:
-            app.killer.detectDist = 6
+            app.killer.detectDist = 7
             app.end = [rT, cT]
             app.chaseT0 = time.time()
             app.start = [rK, cK]
@@ -816,8 +826,10 @@ def timerFired(app):
     jailCountDown(app)
     generateCharSprites(app) # animation
     chestsAndEscaping(app) # open chests and check for escape (win)
-    killerAI(app)
-    if not app.survB.isDead and not app.survB.inJail and not app.survB.isDying:
+    if not app.killer.isFreezed:
+        killerAI(app)
+    if not app.survB.isDead and not app.survB.inJail and not app.survB.isDying\
+        and not app.survB.isFreezed:
         survBAI(app)
 
 #################################################
