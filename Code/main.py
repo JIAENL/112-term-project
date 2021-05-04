@@ -4,6 +4,9 @@ import time, copy, random
 #################################################
 # helpers
 #################################################
+def BGImageMaker(app, file):
+    image = Image.open(file)
+    return image.resize((1300, 650))
 def rgbString(r, g, b): return f'#{r:02x}{g:02x}{b:02x}' # from: https://www.cs.cmu.edu/~112/notes/notes-graphics.html
 def getCellBounds(margin, topMargin, row, col):
     x1 = margin + col*50
@@ -177,6 +180,8 @@ def appStarted(app):
     app.topMargin = 80
     app.margin = 20
     app.mainMessage = 'Press Arrow Keys To Move'
+    app.screenColor = rgbString(52, 64, 99)
+    app.wallColor = rgbString(79, 93, 111)
     # game settings (partial)
     app.At0 = 0
     app.Bt0 = 0
@@ -215,6 +220,7 @@ def appStarted(app):
                [0,0,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
                [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
                [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,0,0,1,0,0,0,0]]
+    app.floorImage = BGImageMaker(app, 'MakingMap1.png')
     # for killer
     app.start = []
     app.end = []
@@ -832,7 +838,7 @@ def drawChar(app, canvas, char):
 def drawWalls(app, canvas):
     for obs in app.obsList:
         canvas.create_rectangle(obs.x1, obs.y1,
-            obs.x2, obs.y2, fill='grey', outline='grey')
+            obs.x2, obs.y2, fill=app.wallColor, outline=app.wallColor)
 
 def drawPassableObs(app, canvas):
     for lst in app.passableObs:
@@ -854,29 +860,42 @@ def drawChests(app, canvas):
 
 def drawBasicScreen(app, canvas):
     # main message and screen
+    canvas.create_rectangle(0,0,app.width,app.topMargin,
+        fill=app.screenColor, outline=app.screenColor)
+    canvas.create_rectangle(0,0,app.margin,app.height,
+        fill=app.screenColor, outline=app.screenColor)
+    canvas.create_rectangle(app.width-app.margin,0,app.width,app.height,
+        fill=app.screenColor, outline=app.screenColor)
+    canvas.create_rectangle(0,app.height-app.margin,app.width,app.height,
+        fill=app.screenColor, outline=app.screenColor)
     canvas.create_rectangle(app.margin, app.topMargin,
         app.width - app.margin, app.height - app.margin, outline = 'black')
     canvas.create_text(app.width//2, app.topMargin//2,
-            text=app.mainMessage, font='Ariel 20')
+            text=app.mainMessage, font='Ariel 20', fill='white')
     # chest info
     canvas.create_text(app.margin, app.topMargin//4, anchor='w',
-        text=f'Chest 1 {app.chest1.getMessage()}', font='Ariel 20') # chest 1
+        text=f'Chest 1 {app.chest1.getMessage()}', font='Ariel 20', fill='white') # chest 1
     canvas.create_text(app.margin, app.topMargin*(3/4), anchor='w',
-        text=f'Chest 2 {app.chest2.getMessage()}', font='Ariel 20') # chest 2
+        text=f'Chest 2 {app.chest2.getMessage()}', font='Ariel 20', fill='white') # chest 2
     # survivor A status
     canvas.create_text(app.width-13*app.margin,app.topMargin//4,
-        anchor='e', text='P1', font='Ariel 15') 
+        anchor='e', text='P1', font='Ariel 15', fill='white') 
     canvas.create_text(app.width-11*app.margin,app.topMargin*(2/4),
-        anchor='e', text=app.survA.getHealthMessage(), font='Ariel 15') 
+        anchor='e', text=app.survA.getHealthMessage(), font='Ariel 15', fill='white') 
     canvas.create_text(app.width-11*app.margin,app.topMargin*(3/4),
-        anchor='e', text=app.survA.getJailCountMessage(), font='Ariel 15') 
+        anchor='e', text=app.survA.getJailCountMessage(), font='Ariel 15', fill='white') 
     # survivor B status
     canvas.create_text(app.width-3*app.margin,app.topMargin//4,
-        anchor='e', text='P2', font='Ariel 15') 
+        anchor='e', text='P2', font='Ariel 15', fill='white') 
     canvas.create_text(app.width-1*app.margin,app.topMargin*(2/4),
-        anchor='e', text=app.survB.getHealthMessage(), font='Ariel 15') 
+        anchor='e', text=app.survB.getHealthMessage(), font='Ariel 15', fill='white') 
     canvas.create_text(app.width-1*app.margin,app.topMargin*(3/4),
-        anchor='e', text=app.survB.getJailCountMessage(), font='Ariel 15') 
+        anchor='e', text=app.survB.getJailCountMessage(), font='Ariel 15', fill='white') 
+
+def drawBackground(app, canvas):
+    canvas.create_image(app.width//2,
+        app.height//2 + (app.topMargin-app.margin),
+        image=ImageTk.PhotoImage(app.floorImage))
 
 def draw25Grids(app, canvas):
     for row in range(23):
@@ -893,16 +912,16 @@ def draw50Grids(app, canvas):
                 app.topMargin+(row+1)*50)
 
 def redrawAll(app, canvas):
-    drawBasicScreen(app, canvas)
+    drawBackground(app, canvas)
     drawPassableObs(app, canvas)
     drawWalls(app, canvas)
     for char in app.charList:
         drawChar(app, canvas, char)
     drawChests(app, canvas)
-    # need a draw path fcn
+    drawBasicScreen(app, canvas)
 
     # draw25Grids(app, canvas)
-    draw50Grids(app, canvas)
+    # draw50Grids(app, canvas)
 
 #################################################
 # main
@@ -914,4 +933,5 @@ Assets Cited:
 https://penusbmic.itch.io/sci-fi-character-pack-12
 https://maytch.itch.io/free-32x64-kanako-platformer-character-sprite-set
 https://robertoanta.itch.io/free-rpg-wooden
+https://blog.indiumgames.fi/2014/08/06/creating-level-2d-game/
 '''
