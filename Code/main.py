@@ -52,8 +52,8 @@ def generateBPos(app):
         (app.margin+(23*25), app.topMargin+(7*25)), # col 11 row 3
         (app.margin+(33*25), app.topMargin+(9*25)), # col 16 row 4
         (app.margin+(27*25), app.topMargin+(11*25)), # col 13 row 5
-        (app.margin+(47*25), app.topMargin+(9*25)), # col 23 row 4
-        (app.margin+(15*25), app.topMargin+(19*25)) # col 7 row 9
+        (app.margin+(47*25), app.topMargin+(9*25)) # col 23 row 4
+        # (app.margin+(15*25), app.topMargin+(19*25)) # col 7 row 9
         ]
     return random.choice(L)
 #################################################
@@ -177,6 +177,7 @@ class Survivor(Char):
 # start app
 #################################################
 def appStarted(app):
+    app.mode = 'splashScreenMode'
     # basic display
     app.topMargin = 80
     app.margin = 20
@@ -338,6 +339,53 @@ def appStarted(app):
     app.chestList = [app.chest1, app.chest2]
     app.obsList += [app.chest1, app.chest2]
 
+##########################################
+# Splash Screen Mode
+##########################################
+# adapted from: https://www.cs.cmu.edu/~112/notes/notes-animations-part4.html#usingModes
+def splashScreenMode_redrawAll(app, canvas):
+    canvas.create_rectangle(0,0,app.width,app.height,fill=app.screenColor)
+    font = 'Courier 20'
+    color = 'white'
+    dist = app.height // 16
+    canvas.create_text(app.width//2, 2*dist,
+            text='Live by Daylight', font='Courier 50', fill=color)
+    canvas.create_text(app.width//2, 15*dist,
+        text='Press any key to start',font=font, fill=color)
+    canvas.create_text(app.width//4, 13*dist,
+        text='P = Pause',font=font, fill=color)
+    canvas.create_text(app.width*(3/4), 13*dist,
+        text='R = Restart',font=font, fill=color)
+    canvas.create_text(app.width//2, 13*dist,
+        text='F = Open the chest',font=font, fill=color)
+    # middle messages
+    canvas.create_text(app.width//2, 4*dist,
+        text='You (P1) woke up in this manor with hazy memories.',font=font, fill=color)
+    canvas.create_text(app.width//2, 5*dist,
+        text='All you know is to exit the gate in the south to escape from the killer.',
+        font=font, fill=color)
+    canvas.create_text(app.width//2, 6*dist,
+        text='And you must open one of the chests to get the key.',
+        font=font, fill=color)
+    canvas.create_text(app.width//2, 8*dist,
+        text='Luckily, you have an experienced attendant to help you.',
+        font=font, fill=color)
+    canvas.create_text(app.width//2, 9*dist,
+        text='But...she looks just like you.',
+        font=font, fill=color)
+    canvas.create_text(app.width//2, 10*dist,
+        text='You wonder who she is...',
+        font=font, fill=color)
+    canvas.create_text(app.width//2, 11*dist,
+        text='or was?',
+        font=font, fill=color)
+
+def splashScreenMode_keyPressed(app, event):
+    app.mode = 'gameMode'
+
+##########################################
+# Game Mode
+#########################################
 def move(app, char, dx, dy): # move when valid
     char.isMoving = True
     char.cx += dx
@@ -386,12 +434,12 @@ def cheatKeys(app, event):
     if event.key == 'b': # freeze survB
         app.survB.isFreezed = not app.survB.isFreezed
 
-def keyPressed(app, event):
+def gameMode_keyPressed(app, event):
     cheatKeys(app, event)
     if app.gameOver: return
     # move survA direction key
     if (event.key == 'Left' or event.key == 'Right' or event.key == 'Up'\
-        or event.key == 'Down') and not app.survA.isDying:
+        or event.key == 'Down') and not app.survA.isDying and not app.survA.inJail:
         app.survA.t0 = time.time() # record input time
         if event.key == 'Left':
             move(app, app.survA, -app.survA.speed, 0)
@@ -636,7 +684,7 @@ def killerAI(app):
                     app.killer.mutablePRoute = absToRelPath(app, app.start, pathInRC) # make absolute path to relative
                     app.stepList = getFirstStep(app.killer.mutablePRoute)
             # chase!!!
-            elif time.time() - app.chaseT0 >= 0.1:
+            elif time.time() - app.chaseT0 >= 0.08:
                 chase(app)
         # if no target: both legal, one legal, no legal
         elif app.killer.target == None:
@@ -820,7 +868,7 @@ def survBAI(app):
     elif app.survB.isApproaching and time.time()-app.approachT0 >= 0.1:
         approachChest(app)
 
-def timerFired(app):
+def gameMode_timerFired(app):
     if app.gameOver: return
     if app.gamePaused: return
     jailCountDown(app)
@@ -925,13 +973,13 @@ def drawLight(app, canvas):
         canvas.create_image(app.survA.cx, app.survA.cy,
             image=ImageTk.PhotoImage(app.lightImage))
         canvas.create_rectangle(0,0,app.width, app.survA.cy-111,
-            fill=app.blackColor) # top
+            fill=app.blackColor, outline=app.blackColor) # top
         canvas.create_rectangle(0,app.survA.cy+111,app.width, app.height,
-            fill=app.blackColor) # bottom
+            fill=app.blackColor, outline=app.blackColor) # bottom
         canvas.create_rectangle(0,app.survA.cy-111,app.survA.cx-111, app.survA.cy+111,
-            fill=app.blackColor) # left
+            fill=app.blackColor, outline=app.blackColor) # left
         canvas.create_rectangle(app.survA.cx+111,app.survA.cy-111,app.width,app.survA.cy+111,
-            fill=app.blackColor) # right
+            fill=app.blackColor, outline=app.blackColor) # right
 
 def draw25Grids(app, canvas):
     for row in range(23):
@@ -947,7 +995,7 @@ def draw50Grids(app, canvas):
                 app.topMargin+row*50, app.margin+(col+1)*50,
                 app.topMargin+(row+1)*50)
 
-def redrawAll(app, canvas):
+def gameMode_redrawAll(app, canvas):
     drawBackground(app, canvas)
     drawPassableObs(app, canvas)
     drawWalls(app, canvas)
